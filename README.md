@@ -43,11 +43,16 @@ Alternatively, you can run the platform-specific scripts:
 - **iOS**: `npm run ios`
 - **Web**: `npm run web`
 
-## 🧪 Linting and Type Checking
+## 🧪 Linting, Type Checking & Testing
 
-To ensure code quality and type safety, the project uses ESLint and TypeScript compilation checks:
-- **Linting**: Run `npm run lint` to scan the codebase for style and quality issues.
-- **Type Checking**: Run `npm run typecheck` to run the TypeScript compiler in no-emit mode.
+To ensure code quality, type safety, and correctness, the project uses ESLint, TypeScript, and Jest:
+
+| Command | Description |
+|---|---|
+| `npm run lint` | Run ESLint to scan for style and quality issues |
+| `npm run typecheck` | Run TypeScript compiler in no-emit mode |
+| `npm run test` | Run all unit and component tests via Jest |
+| `npm run test:watch` | Run Jest in interactive watch mode |
 
 ## 🛠 Tech Stack
 

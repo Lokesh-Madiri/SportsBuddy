@@ -41,6 +41,21 @@ To maintain consistency and prevent bugs across the codebase, **we enforce stric
   ```
   Your code must compile without type errors.
 
+### Unit & Component Testing (Jest)
+* The project uses [Jest](https://jestjs.io/) with [jest-expo](https://github.com/expo/expo/tree/main/packages/jest-expo) and [@testing-library/react-native](https://callstack.github.io/react-native-testing-library/) for unit and component testing.
+* **Test files** follow these naming conventions and live alongside the files they test:
+  - `src/utils/helpers.test.ts` → unit tests for utility functions
+  - `src/components/common/Badge.test.tsx` → component tests for `Badge`
+* **Running tests**: Run the full test suite with:
+  ```bash
+  npm run test
+  ```
+* **Watch mode**: While developing, run tests in watch mode for instant feedback:
+  ```bash
+  npm run test:watch
+  ```
+* **Coverage**: All new utility functions and shared components should have accompanying unit or component tests. Pull requests that add features without tests will be asked to add coverage before merging.
+
 ---
 
 ## 🚀 Pull Request Guidelines

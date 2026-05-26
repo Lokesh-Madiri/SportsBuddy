@@ -68,8 +68,7 @@ Thumbs.db
 # =========================
 skills-lock.json
 .agents/
-package-lock.json
-package.json
+
 
 
 # =========================
