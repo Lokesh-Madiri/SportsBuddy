@@ -3,24 +3,23 @@ import {
   doc,
   addDoc,
   updateDoc,
-  deleteDoc,
   getDoc,
   getDocs,
   query,
   where,
-  orderBy,
   limit,
   onSnapshot,
   serverTimestamp,
   arrayUnion,
   arrayRemove,
   increment,
+  orderBy,
   Timestamp,
   QueryConstraint,
 } from 'firebase/firestore';
 import { db } from './config';
 import { FIRESTORE_COLLECTIONS } from '../constants';
-import type { SportEvent, Message, Chat, User } from '../utils/types';
+import type { SportEvent, Message, User } from '../utils/types';
 
 // ─── Events ───────────────────────────────────────────────────────────────────
 export async function createEvent(eventData: Omit<SportEvent, 'id' | 'createdAt' | 'updatedAt'>): Promise<string> {
@@ -37,17 +36,11 @@ export async function getEvents(filters?: {
   skillLevel?: string;
   limitCount?: number;
 }): Promise<SportEvent[]> {
+  // Avoid composite index requirement — filter client-side for optional fields
   const constraints: QueryConstraint[] = [
     where('status', '==', 'upcoming'),
-    orderBy('date', 'asc'),
   ];
 
-  if (filters?.sport) {
-    constraints.push(where('sport', '==', filters.sport));
-  }
-  if (filters?.skillLevel) {
-    constraints.push(where('skillLevel', '==', filters.skillLevel));
-  }
   if (filters?.limitCount) {
     constraints.push(limit(filters.limitCount));
   }
@@ -55,13 +48,20 @@ export async function getEvents(filters?: {
   const q = query(collection(db, FIRESTORE_COLLECTIONS.EVENTS), ...constraints);
   const snapshot = await getDocs(q);
 
-  return snapshot.docs.map((d) => ({
+  let results = snapshot.docs.map((d) => ({
     id: d.id,
     ...d.data(),
     date: (d.data().date as Timestamp)?.toDate() || new Date(),
     createdAt: (d.data().createdAt as Timestamp)?.toDate() || new Date(),
     updatedAt: (d.data().updatedAt as Timestamp)?.toDate() || new Date(),
   })) as SportEvent[];
+
+  // Client-side filters for optional fields
+  if (filters?.sport) results = results.filter((e) => e.sport === filters.sport);
+  if (filters?.skillLevel) results = results.filter((e) => e.skillLevel === filters.skillLevel);
+
+  // Sort by date ascending client-side
+  return results.sort((a, b) => a.date.getTime() - b.date.getTime());
 }
 
 export async function getEventById(eventId: string): Promise<SportEvent | null> {
@@ -110,21 +110,25 @@ export async function leaveEvent(eventId: string, uid: string): Promise<void> {
 }
 
 export function subscribeToEvents(callback: (events: SportEvent[]) => void) {
+  // Note: combining WHERE status + ORDER BY date requires a composite Firestore index.
+  // Until the index is built, we query without orderBy and sort client-side.
   const q = query(
     collection(db, FIRESTORE_COLLECTIONS.EVENTS),
     where('status', '==', 'upcoming'),
-    orderBy('date', 'asc'),
     limit(20)
   );
 
   return onSnapshot(q, (snapshot) => {
-    const events = snapshot.docs.map((d) => ({
-      id: d.id,
-      ...d.data(),
-      date: (d.data().date as Timestamp)?.toDate() || new Date(),
-      createdAt: (d.data().createdAt as Timestamp)?.toDate() || new Date(),
-      updatedAt: (d.data().updatedAt as Timestamp)?.toDate() || new Date(),
-    })) as SportEvent[];
+    const events = snapshot.docs
+      .map((d) => ({
+        id: d.id,
+        ...d.data(),
+        date: (d.data().date as Timestamp)?.toDate() || new Date(),
+        createdAt: (d.data().createdAt as Timestamp)?.toDate() || new Date(),
+        updatedAt: (d.data().updatedAt as Timestamp)?.toDate() || new Date(),
+      }))
+      // Sort client-side by date ascending
+      .sort((a, b) => (a as SportEvent).date.getTime() - (b as SportEvent).date.getTime()) as SportEvent[];
     callback(events);
   });
 }

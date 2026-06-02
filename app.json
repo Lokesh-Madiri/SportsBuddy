@@ -2,6 +2,7 @@
   "expo": {
     "name": "SportsBuddy",
     "slug": "SportsBuddy",
+    "scheme": "sportsbuddy",
     "version": "1.0.0",
     "orientation": "portrait",
     "icon": "./assets/icon.png",
@@ -22,7 +23,7 @@
       "adaptiveIcon": {
         "backgroundColor": "#0a0a0a"
       },
-      "package": "com.sportsbuddy.app",
+      "package": "com.nsky26.sportsbuddy",
       "permissions": [
         "ACCESS_FINE_LOCATION",
         "ACCESS_COARSE_LOCATION",

@@ -6,7 +6,7 @@ import { MainTabParamList } from '../utils/types';
 import { HomeNavigator } from './HomeNavigator';
 import { DiscoverNavigator } from './DiscoverNavigator';
 import { ChatNavigator } from './ChatNavigator';
-import { ProfileScreen } from '../screens/ProfileScreen';
+import { ProfileNavigator } from './ProfileNavigator';
 import { Colors } from '../theme';
 import { useChatStore } from '../store/chatStore';
 
@@ -79,7 +79,7 @@ export function BottomTabNavigator() {
       />
       <Tab.Screen
         name="Profile"
-        component={ProfileScreen}
+        component={ProfileNavigator}
         options={{
           tabBarIcon: ({ focused }) => (
             <TabIcon name={focused ? 'person' : 'person-outline'} label="Profile" focused={focused} />

@@ -10,8 +10,8 @@ import { LinearGradient } from 'expo-linear-gradient';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { NativeStackNavigationProp } from '@react-navigation/native-stack';
 import { ChatStackParamList } from '../utils/types';
-import { GlassCard, Avatar } from '../components/common';
-import { Colors, Spacing } from '../theme';
+import { GlassCard } from '../components/common';
+import { Colors, BorderRadius, Spacing } from '../theme';
 
 type Props = {
   navigation: NativeStackNavigationProp<ChatStackParamList, 'ChatList'>;
@@ -99,6 +99,24 @@ export function ChatListScreen({ navigation }: Props) {
               </GlassCard>
             </TouchableOpacity>
           )}
+          ListHeaderComponent={
+            <TouchableOpacity onPress={() => navigation.navigate('AIChat')} activeOpacity={0.86}>
+              <GlassCard style={styles.aiCard} neonBorder>
+                <View style={styles.aiIcon}>
+                  <Text style={styles.aiIconText}>AI</Text>
+                </View>
+                <View style={styles.aiContent}>
+                  <Text style={styles.aiTitle}>SportsBuddy AI Assistant</Text>
+                  <Text style={styles.aiSubtitle} numberOfLines={2}>
+                    Find matches, teammates, training ideas, rules, and event plans.
+                  </Text>
+                </View>
+                <View style={styles.aiBadge}>
+                  <Text style={styles.aiBadgeText}>Smart</Text>
+                </View>
+              </GlassCard>
+            </TouchableOpacity>
+          }
           ListEmptyComponent={
             <View style={styles.empty}>
               <Text style={styles.emptyTitle}>No chats yet</Text>
@@ -140,6 +158,52 @@ const styles = StyleSheet.create({
     paddingHorizontal: Spacing.lg,
     paddingBottom: 100,
     gap: 10,
+  },
+  aiCard: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    padding: 16,
+    gap: 12,
+    marginBottom: 12,
+  },
+  aiIcon: {
+    width: 52,
+    height: 52,
+    borderRadius: 26,
+    backgroundColor: Colors.primary,
+    alignItems: 'center',
+    justifyContent: 'center',
+    shadowColor: Colors.primary,
+    shadowOpacity: 0.35,
+    shadowRadius: 12,
+  },
+  aiIconText: {
+    fontSize: 15,
+    fontWeight: '900',
+    color: Colors.primaryForeground,
+  },
+  aiContent: { flex: 1 },
+  aiTitle: {
+    fontSize: 15,
+    fontWeight: '900',
+    color: Colors.foreground,
+  },
+  aiSubtitle: {
+    marginTop: 3,
+    fontSize: 12,
+    lineHeight: 17,
+    color: Colors.mutedForeground,
+  },
+  aiBadge: {
+    paddingHorizontal: 9,
+    paddingVertical: 5,
+    borderRadius: BorderRadius.full,
+    backgroundColor: Colors.primaryDim,
+  },
+  aiBadgeText: {
+    fontSize: 10,
+    fontWeight: '900',
+    color: Colors.primary,
   },
   chatItem: {
     flexDirection: 'row',

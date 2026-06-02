@@ -71,13 +71,13 @@ export const promptService = {
   },
 
   async generateShortExplanation(prompt: string, fallback: string): Promise<string> {
-    if (!AI_CONFIG.API_KEY) return fallback;
+    if (!AI_CONFIG.OPENAI_API_KEY) return fallback;
 
     try {
       const response = await fetch(OPENAI_CHAT_URL, {
         method: 'POST',
         headers: {
-          Authorization: `Bearer ${AI_CONFIG.API_KEY}`,
+          Authorization: `Bearer ${AI_CONFIG.OPENAI_API_KEY}`,
           'Content-Type': 'application/json',
         },
         body: JSON.stringify({

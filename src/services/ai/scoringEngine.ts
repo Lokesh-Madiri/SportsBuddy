@@ -194,6 +194,10 @@ function scorePlayFrequency(gamesPlayed: number): number {
 }
 
 function scoreReliability(user: Partial<User>, behavior?: UserBehaviorProfile | null): number {
+  if (user.reputation?.reliabilityScore !== undefined) {
+    return clamp(user.reputation.reliabilityScore);
+  }
+
   const winRate = user.stats?.winRate || 0;
   const ratingScore = ((user.rating || 0) / 5) * 100;
   const behaviorScore = behavior?.reliabilityScore ?? 65;

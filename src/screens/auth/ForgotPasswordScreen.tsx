@@ -1,18 +1,18 @@
 import React, { useState } from 'react';
 import {
-  View,
-  Text,
-  StyleSheet,
-  TouchableOpacity,
   Alert,
   KeyboardAvoidingView,
   Platform,
+  StyleSheet,
+  Text,
+  TouchableOpacity,
+  View,
 } from 'react-native';
 import { LinearGradient } from 'expo-linear-gradient';
 import { NativeStackNavigationProp } from '@react-navigation/native-stack';
-import { useSignIn } from '@clerk/clerk-expo';
 import { AuthStackParamList } from '../../utils/types';
 import { InputField, PrimaryButton } from '../../components/common';
+import { authService, mapFirebaseAuthError } from '../../services/auth';
 import { Colors } from '../../theme';
 import { isValidEmail } from '../../utils/helpers';
 
@@ -26,28 +26,23 @@ export function ForgotPasswordScreen({ navigation }: Props) {
   const [sent, setSent] = useState(false);
   const [error, setError] = useState('');
 
-  const { signIn, isLoaded } = useSignIn();
-
   async function handleReset() {
-    if (!email) { setError('Email is required'); return; }
-    if (!isValidEmail(email)) { setError('Enter a valid email'); return; }
-    if (!isLoaded) return;
+    if (!email) {
+      setError('Email is required');
+      return;
+    }
+    if (!isValidEmail(email)) {
+      setError('Enter a valid email');
+      return;
+    }
+
     setError('');
     setLoading(true);
     try {
-      // Clerk sends a password reset email with a one-time code
-      await signIn.create({
-        strategy: 'reset_password_email_code',
-        identifier: email.trim(),
-      });
+      await authService.sendPasswordReset(email);
       setSent(true);
-    } catch (err: any) {
-      const clerkCode = err?.errors?.[0]?.code ?? '';
-      const msg =
-        clerkCode === 'form_identifier_not_found'
-          ? 'No account found with this email'
-          : 'Failed to send reset email. Try again.';
-      Alert.alert('Error', msg);
+    } catch (resetError) {
+      Alert.alert('Error', mapFirebaseAuthError(resetError));
     } finally {
       setLoading(false);
     }
@@ -62,7 +57,7 @@ export function ForgotPasswordScreen({ navigation }: Props) {
         <View style={styles.content}>
           {sent ? (
             <View style={styles.successContainer}>
-              <Text style={styles.successIcon}>📧</Text>
+              <Text style={styles.successIcon}>Mail</Text>
               <Text style={styles.title}>Check your email</Text>
               <Text style={styles.subtitle}>
                 We sent a password reset link to{'\n'}
@@ -76,11 +71,8 @@ export function ForgotPasswordScreen({ navigation }: Props) {
             </View>
           ) : (
             <>
-              <TouchableOpacity
-                onPress={() => navigation.goBack()}
-                style={styles.backButton}
-              >
-                <Text style={styles.backText}>← Back</Text>
+              <TouchableOpacity onPress={() => navigation.goBack()} style={styles.backButton}>
+                <Text style={styles.backText}>Back</Text>
               </TouchableOpacity>
 
               <Text style={styles.title}>Forgot password?</Text>
@@ -93,17 +85,16 @@ export function ForgotPasswordScreen({ navigation }: Props) {
                   label="Email"
                   placeholder="you@example.com"
                   value={email}
-                  onChangeText={(t) => { setEmail(t); setError(''); }}
+                  onChangeText={(text) => {
+                    setEmail(text);
+                    setError('');
+                  }}
                   keyboardType="email-address"
                   autoCapitalize="none"
                   error={error}
                 />
 
-                <PrimaryButton
-                  title="Send Reset Link"
-                  onPress={handleReset}
-                  loading={loading}
-                />
+                <PrimaryButton title="Send Reset Link" onPress={handleReset} loading={loading} />
               </View>
             </>
           )}
@@ -146,7 +137,11 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
     gap: 16,
   },
-  successIcon: { fontSize: 64 },
+  successIcon: {
+    fontSize: 24,
+    fontWeight: '900',
+    color: Colors.primary,
+  },
   emailHighlight: {
     color: Colors.primary,
     fontWeight: '600',

@@ -4,20 +4,102 @@ export interface User {
   email: string;
   displayName: string;
   photoURL?: string;
+  profileImage?: string;
+  imageURL?: string;
   username?: string;
   bio?: string;
+  sportsPersonality?: string;
   sports: string[];
+  favoriteSport?: string;
+  skillLevels?: Record<string, SkillLevel>;
   skillLevel?: string;
+  availability?: UserAvailability;
   location?: UserLocation;
   stats: UserStats;
   achievements: Achievement[];
+  badges?: AchievementBadge[];
+  completedMatches?: MatchHistoryItem[];
   rating: number;
   reviewCount: number;
+  averageRating?: number;
+  sportsmanshipScore?: number;
+  reliabilityScore?: number;
+  totalMatches?: number;
+  totalReviews?: number;
+  profileCompleted?: boolean;
+  reputation?: ReputationMetrics;
   createdAt: Date;
   updatedAt: Date;
   isOnline?: boolean;
   fcmToken?: string;
 }
+
+export type ReviewRole = 'teammate' | 'organizer';
+
+export interface UserReview {
+  id: string;
+  matchId: string;
+  reviewerId: string;
+  reviewerName: string;
+  reviewerAvatar?: string;
+  revieweeId: string;
+  revieweeName: string;
+  role: ReviewRole;
+  rating: number;
+  sportsmanship: number;
+  punctuality: number;
+  comment: string;
+  tags: string[];
+  createdAt: Date;
+  aiSignals?: ReputationAISignals;
+}
+
+export interface UserRatingAggregate {
+  userId: string;
+  averageRating: number;
+  totalReviews: number;
+  teammateAverage: number;
+  teammateReviewCount: number;
+  organizerAverage: number;
+  organizerReviewCount: number;
+  sportsmanshipAverage: number;
+  lastReviewAt?: Date;
+  updatedAt: Date;
+}
+
+export interface ReputationMetrics {
+  userId: string;
+  averageRating: number;
+  reviewCount: number;
+  sportsmanshipScore: number;
+  reliabilityScore: number;
+  punctualityScore: number;
+  attendanceRate: number;
+  cancellationRate: number;
+  communityScore: number;
+  trustLevel: ReputationLevel;
+  trustedBadge: boolean;
+  attendance: {
+    attended: number;
+    missed: number;
+    late: number;
+    cancellations: number;
+    totalTracked: number;
+  };
+  aiSignals: ReputationAISignals;
+  updatedAt: Date;
+}
+
+export type ReputationLevel = 'new' | 'rising' | 'trusted' | 'elite';
+
+export interface ReputationAISignals {
+  trustScoreReady: boolean;
+  behaviorVectorVersion: string;
+  lastAnalyzedAt?: Date;
+  flags: string[];
+}
+
+export type AttendanceStatus = 'attended' | 'missed' | 'late' | 'cancelled';
 
 export interface UserStats {
   gamesPlayed: number;
@@ -39,6 +121,35 @@ export interface Achievement {
   icon: string;
   earned: boolean;
   earnedAt?: Date;
+}
+
+export type SkillLevel = 'Beginner' | 'Intermediate' | 'Advanced' | 'Pro';
+
+export interface UserAvailability {
+  availableDays: string[];
+  availableTimeSlots: string[];
+  weekendOnly?: boolean;
+  preferredTimes?: string[];
+}
+
+export interface AchievementBadge {
+  id: string;
+  name: string;
+  description: string;
+  icon: string;
+  earned: boolean;
+  earnedAt?: Date;
+}
+
+export interface MatchHistoryItem {
+  id: string;
+  sport: string;
+  title: string;
+  date: Date;
+  result?: 'Won' | 'Lost' | 'Draw' | 'Played';
+  score?: string;
+  attendanceStatus?: AttendanceStatus;
+  organizerName?: string;
 }
 
 // ─── Event Types ──────────────────────────────────────────────────────────────
@@ -161,6 +272,7 @@ export type MainTabParamList = {
 export type HomeStackParamList = {
   HomeScreen: undefined;
   MatchDetails: { eventId: string };
+  PostMatchRating: { eventId: string };
   CreateGame: undefined;
   ChatScreen: { chatId: string; eventTitle: string };
   AllEvents: undefined;
@@ -175,6 +287,7 @@ export type DiscoverStackParamList = {
 export type ChatStackParamList = {
   ChatList: undefined;
   ChatScreen: { chatId: string; eventTitle: string };
+  AIChat: undefined;
 };
 
 export type ProfileStackParamList = {

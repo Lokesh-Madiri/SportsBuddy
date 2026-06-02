@@ -11,6 +11,7 @@ import { eventSuggestionService } from './eventSuggestionService';
 import { recommendationService } from './recommendationService';
 import { userBehaviorService } from './userBehaviorService';
 import { promptService } from './promptService';
+import { chatService } from './chatService';
 import { mergeBehaviorWithUserSports, unique } from './aiHelpers';
 
 export const aiService = {
@@ -100,6 +101,7 @@ export const aiService = {
   },
 
   subscribeToEventRecommendations: eventSuggestionService.subscribeToEventRecommendations,
+  chat: chatService,
 };
 
 export * from './aiTypes';
@@ -109,3 +111,7 @@ export { recommendationService } from './recommendationService';
 export { scoringEngine } from './scoringEngine';
 export { userBehaviorService } from './userBehaviorService';
 export { promptService } from './promptService';
+export { chatService } from './chatService';
+export { aiClient } from './aiClient';
+export { assistantPrompts } from './assistantPrompts';
+export { compatibilityEngine } from './compatibilityEngine';

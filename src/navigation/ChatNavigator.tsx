@@ -3,6 +3,7 @@ import { createNativeStackNavigator } from '@react-navigation/native-stack';
 import { ChatStackParamList } from '../utils/types';
 import { ChatListScreen } from '../screens/ChatListScreen';
 import { ChatScreen } from '../screens/ChatScreen';
+import { AIChatScreen } from '../screens/AIChatScreen';
 
 const Stack = createNativeStackNavigator<ChatStackParamList>();
 
@@ -16,6 +17,7 @@ export function ChatNavigator() {
       }}
     >
       <Stack.Screen name="ChatList" component={ChatListScreen} />
+      <Stack.Screen name="AIChat" component={AIChatScreen} />
       <Stack.Screen name="ChatScreen" component={ChatScreen} />
     </Stack.Navigator>
   );

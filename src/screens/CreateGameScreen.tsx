@@ -43,6 +43,8 @@ export function CreateGameScreen({ navigation }: Props) {
         `Based on your preferences, we recommend hosting on ${suggestion.suggestedDay}s at ${suggestion.suggestedTime} for maximum player turnout.`
       );
     });
+    // user is intentionally run once on mount
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
   async function handlePublish() {
@@ -77,7 +79,7 @@ export function CreateGameScreen({ navigation }: Props) {
         { text: 'View Game', onPress: () => navigation.replace('MatchDetails', { eventId }) },
         { text: 'Go Home', onPress: () => navigation.popToTop() },
       ]);
-    } catch (err) {
+    } catch {
       Alert.alert('Error', 'Failed to create game. Please try again.');
     } finally {
       setLoading(false);

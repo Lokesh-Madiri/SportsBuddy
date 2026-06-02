@@ -1,26 +1,37 @@
 import { initializeApp, getApps, getApp } from 'firebase/app';
+import { initializeAuth, getAuth, inMemoryPersistence, type Auth } from 'firebase/auth';
 import { getFirestore } from 'firebase/firestore';
 import { getStorage } from 'firebase/storage';
+import { Platform } from 'react-native';
 
 // ─── Firebase Configuration ───────────────────────────────────────────────────
-// Authentication is handled by Clerk. Firebase is used for Firestore & Storage.
-// Copy .env.example to .env and fill in your values.
 const firebaseConfig = {
-  apiKey: process.env.EXPO_PUBLIC_FIREBASE_API_KEY || 'your_firebase_api_key_here',
-  authDomain: process.env.EXPO_PUBLIC_FIREBASE_AUTH_DOMAIN || 'your_firebase_auth_domain_here',
-  projectId: process.env.EXPO_PUBLIC_FIREBASE_PROJECT_ID || 'your_firebase_project_id_here',
-  storageBucket: process.env.EXPO_PUBLIC_FIREBASE_STORAGE_BUCKET || 'your_firebase_storage_bucket_here',
-  messagingSenderId: process.env.EXPO_PUBLIC_FIREBASE_MESSAGING_SENDER_ID || 'your_firebase_messaging_sender_id_here',
-  appId: process.env.EXPO_PUBLIC_FIREBASE_APP_ID || 'your_firebase_app_id_here',
+  apiKey: process.env.EXPO_PUBLIC_FIREBASE_API_KEY,
+  authDomain: process.env.EXPO_PUBLIC_FIREBASE_AUTH_DOMAIN,
+  projectId: process.env.EXPO_PUBLIC_FIREBASE_PROJECT_ID,
+  storageBucket: process.env.EXPO_PUBLIC_FIREBASE_STORAGE_BUCKET,
+  messagingSenderId: process.env.EXPO_PUBLIC_FIREBASE_MESSAGING_SENDER_ID,
+  appId: process.env.EXPO_PUBLIC_FIREBASE_APP_ID,
 };
 
 // Initialize Firebase (prevent duplicate initialization)
 const app = getApps().length === 0 ? initializeApp(firebaseConfig) : getApp();
 
-// Initialize Firestore
-const db = getFirestore(app);
+// Firebase 12 removed getReactNativePersistence from the public bundle.
+// We use inMemoryPersistence here — session persistence is handled by our
+// own sessionService (AsyncStorage saves the uid and restores auth on launch).
+let auth: Auth;
+try {
+  auth =
+    Platform.OS === 'web'
+      ? getAuth(app)
+      : initializeAuth(app, { persistence: inMemoryPersistence });
+} catch {
+  // Auth already initialized (hot reload) — reuse it
+  auth = getAuth(app);
+}
 
-// Initialize Storage
+const db = getFirestore(app);
 const storage = getStorage(app);
 
-export { app, db, storage };
+export { app, auth, db, storage };

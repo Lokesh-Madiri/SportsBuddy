@@ -1,7 +1,7 @@
-import React, { memo } from 'react';
-import { StyleSheet, View } from 'react-native';
+import React, { memo, useEffect, useMemo, useState } from 'react';
+import { StyleSheet, Text, View } from 'react-native';
 import MapView, { Marker, type Region } from 'react-native-maps';
-import type { Coordinates, NearbyEvent, NearbyUser } from '../../services/locationService';
+import { locationService, type Coordinates, type NearbyEvent, type NearbyUser } from '../../services/locationService';
 import { Colors, BorderRadius } from '../../theme';
 import { EventMapMarkers } from './EventMapMarkers';
 import { UserLocationMarker } from './UserLocationMarker';
@@ -11,6 +11,7 @@ type Props = {
   events?: NearbyEvent[];
   teammates?: NearbyUser[];
   radiusMeters?: number;
+  autoLocate?: boolean;
   onEventPress?: (event: NearbyEvent) => void;
   onTeammatePress?: (user: NearbyUser) => void;
 };
@@ -19,27 +20,53 @@ function SportsMapComponent({
   userLocation,
   events = [],
   teammates = [],
+  autoLocate = true,
   onEventPress,
   onTeammatePress,
 }: Props) {
-  const region: Region = {
-    latitude: userLocation?.latitude ?? 37.78825,
-    longitude: userLocation?.longitude ?? -122.4324,
+  const [detectedLocation, setDetectedLocation] = useState<Coordinates | null>(null);
+  const [locationError, setLocationError] = useState<string | null>(null);
+  const effectiveLocation = userLocation || detectedLocation;
+
+  useEffect(() => {
+    let mounted = true;
+    if (!autoLocate || userLocation) return;
+
+    async function detectLocation() {
+      const location = await locationService.getCurrentLocation();
+      if (!mounted) return;
+      if (location) {
+        setDetectedLocation(location);
+        setLocationError(null);
+      } else {
+        setLocationError(locationService.getState().error);
+      }
+    }
+
+    detectLocation();
+    return () => {
+      mounted = false;
+    };
+  }, [autoLocate, userLocation]);
+
+  const region: Region = useMemo(() => ({
+    latitude: effectiveLocation?.latitude ?? 37.78825,
+    longitude: effectiveLocation?.longitude ?? -122.4324,
     latitudeDelta: 0.08,
     longitudeDelta: 0.08,
-  };
+  }), [effectiveLocation]);
 
   return (
     <View style={styles.container}>
       <MapView
         style={styles.map}
         initialRegion={region}
-        region={userLocation ? region : undefined}
+        region={effectiveLocation ? region : undefined}
         showsUserLocation
         showsMyLocationButton
         toolbarEnabled={false}
       >
-        <UserLocationMarker coordinate={userLocation} />
+        <UserLocationMarker coordinate={effectiveLocation} />
         <EventMapMarkers events={events} onPress={onEventPress} />
         {teammates.map((teammate) => {
           if (!teammate.location?.latitude || !teammate.location.longitude) return null;
@@ -58,6 +85,11 @@ function SportsMapComponent({
           );
         })}
       </MapView>
+      {!effectiveLocation && locationError && (
+        <View style={styles.locationNotice}>
+          <Text style={styles.locationNoticeText}>{locationError}</Text>
+        </View>
+      )}
     </View>
   );
 }
@@ -75,5 +107,21 @@ const styles = StyleSheet.create({
   map: {
     width: '100%',
     height: 280,
+  },
+  locationNotice: {
+    position: 'absolute',
+    left: 12,
+    right: 12,
+    bottom: 12,
+    paddingHorizontal: 12,
+    paddingVertical: 10,
+    borderRadius: BorderRadius.md,
+    backgroundColor: 'rgba(10,10,10,0.82)',
+    borderWidth: 1,
+    borderColor: Colors.primaryBorder,
+  },
+  locationNoticeText: {
+    fontSize: 12,
+    color: Colors.foreground,
   },
 });

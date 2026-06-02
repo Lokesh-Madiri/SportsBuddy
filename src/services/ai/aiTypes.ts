@@ -92,3 +92,44 @@ export interface DynamicEventSuggestion extends AIEventSuggestion {
   confidence: RecommendationConfidence;
   source: 'behavior' | 'profile' | 'events' | 'fallback';
 }
+
+export type AIChatRole = 'user' | 'assistant' | 'system';
+
+export interface AIChatSession {
+  chatId: string;
+  userId: string;
+  title?: string;
+  createdAt: Date;
+  updatedAt?: Date;
+}
+
+export interface AIChatMessage {
+  id: string;
+  chatId: string;
+  role: AIChatRole;
+  content: string;
+  createdAt: Date;
+  status?: 'sending' | 'sent' | 'failed';
+  metadata?: {
+    intent?: string;
+    provider?: 'openai' | 'openrouter' | 'local';
+    model?: string;
+    recommendationCount?: number;
+  };
+}
+
+export interface AIProviderRequest {
+  systemPrompt: string;
+  messages: Pick<AIChatMessage, 'role' | 'content'>[];
+  maxTokens?: number;
+  temperature?: number;
+}
+
+export interface AssistantContext {
+  user: Partial<User>;
+  locationSummary?: string;
+  nearbyEvents: EventRecommendation[];
+  teammateRecommendations: TeammateRecommendation[];
+  sportSuggestions: string[];
+  eventSuggestion?: DynamicEventSuggestion;
+}

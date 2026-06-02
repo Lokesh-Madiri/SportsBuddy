@@ -14,7 +14,7 @@ export async function getUserProfile(uid: string): Promise<User | null> {
 }
 
 // ─── Create User Profile (idempotent) ────────────────────────────────────────
-// Called after Clerk sign-up to bootstrap the Firestore user document.
+// Called after Firebase Auth sign-up/sign-in to bootstrap the Firestore user document.
 // Safe to call multiple times — will not overwrite an existing document.
 export async function createUserProfileIfMissing(
   uid: string,
@@ -33,6 +33,20 @@ export async function createUserProfileIfMissing(
     email,
     displayName,
     sports: [],
+    skillLevels: {},
+    favoriteSport: '',
+    bio: '',
+    sportsPersonality: '',
+    profileImage: '',
+    imageURL: '',
+    availability: {
+      availableDays: [],
+      availableTimeSlots: [],
+      weekendOnly: false,
+      preferredTimes: [],
+    },
+    badges: [],
+    completedMatches: [],
     stats: {
       gamesPlayed: 0,
       gamesWon: 0,
@@ -46,6 +60,12 @@ export async function createUserProfileIfMissing(
     ],
     rating: 0,
     reviewCount: 0,
+    averageRating: 0,
+    sportsmanshipScore: 100,
+    reliabilityScore: 100,
+    totalMatches: 0,
+    totalReviews: 0,
+    profileCompleted: false,
   };
 
   await setDoc(docRef, {

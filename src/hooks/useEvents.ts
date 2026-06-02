@@ -11,6 +11,8 @@ export function useEvents() {
       setEvents(liveEvents);
     });
     return unsubscribe;
+    // setLoading and setEvents are stable Zustand actions — safe to omit
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
   const refresh = useCallback(async () => {
@@ -18,9 +20,12 @@ export function useEvents() {
     try {
       const data = await getEvents({ limitCount: 20 });
       setEvents(data);
-    } catch (err: any) {
-      setError(err.message || 'Failed to load events');
+    } catch (err: unknown) {
+      const message = err instanceof Error ? err.message : 'Failed to load events';
+      setError(message);
     }
+    // setLoading, setEvents, setError are stable Zustand actions — safe to omit
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
   return { events, isLoading, error, refresh };

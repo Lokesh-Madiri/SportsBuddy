@@ -1,21 +1,20 @@
 import React, { useState } from 'react';
 import {
-  View,
-  Text,
-  StyleSheet,
-  ScrollView,
-  TouchableOpacity,
+  Alert,
   KeyboardAvoidingView,
   Platform,
-  Alert,
+  ScrollView,
+  StyleSheet,
+  Text,
+  TouchableOpacity,
+  View,
 } from 'react-native';
 import { LinearGradient } from 'expo-linear-gradient';
 import { NativeStackNavigationProp } from '@react-navigation/native-stack';
-import { useSignUp } from '@clerk/clerk-expo';
 import { AuthStackParamList } from '../../utils/types';
-import { createUserProfileIfMissing } from '../../firebase/auth';
-import { useAuthStore } from '../../store/authStore';
 import { InputField, PrimaryButton } from '../../components/common';
+import { authService, mapFirebaseAuthError } from '../../services/auth';
+import { useAuthStore } from '../../store/authStore';
 import { Colors } from '../../theme';
 import { isValidEmail, isValidPassword } from '../../utils/helpers';
 
@@ -30,10 +29,8 @@ export function RegisterScreen({ navigation }: Props) {
   const [confirmPassword, setConfirmPassword] = useState('');
   const [showPassword, setShowPassword] = useState(false);
   const [loading, setLoading] = useState(false);
-  const [errors, setErrors] = useState<Record<string, string>>({});
-
+  const [errors, setErrors] = useState<Record<string, string | undefined>>({});
   const { setUser, setError } = useAuthStore();
-  const { signUp, setActive, isLoaded } = useSignUp();
 
   function validate(): boolean {
     const newErrors: Record<string, string> = {};
@@ -51,46 +48,20 @@ export function RegisterScreen({ navigation }: Props) {
   }
 
   async function handleRegister() {
-    if (!validate() || !isLoaded) return;
+    if (!validate()) return;
     setLoading(true);
+    setError(null);
     try {
-      // Create the Clerk account
-      const result = await signUp.create({
-        emailAddress: email.trim(),
+      const profile = await authService.registerWithEmail({
+        displayName,
+        email,
         password,
-        firstName: displayName.trim().split(' ')[0],
-        lastName: displayName.trim().split(' ').slice(1).join(' ') || undefined,
       });
-
-      if (result.status === 'complete') {
-        // Activate the new session
-        await setActive({ session: result.createdSessionId });
-
-        // Bootstrap the Firestore user profile
-        const uid = result.createdUserId ?? '';
-        const profile = await createUserProfileIfMissing(
-          uid,
-          displayName.trim(),
-          email.trim()
-        );
-        setUser(profile);
-      } else {
-        // Email verification required
-        Alert.alert(
-          'Verify your email',
-          'Please check your inbox and verify your email to complete registration.'
-        );
-      }
-    } catch (err: any) {
-      const clerkCode = err?.errors?.[0]?.code ?? '';
-      const msg =
-        clerkCode === 'form_identifier_exists'
-          ? 'This email is already registered'
-          : clerkCode === 'form_password_pwned'
-          ? 'This password is too common. Please choose a stronger one.'
-          : 'Registration failed. Please try again.';
-      setError(msg);
-      Alert.alert('Registration Failed', msg);
+      setUser(profile);
+    } catch (error) {
+      const message = mapFirebaseAuthError(error);
+      setError(message);
+      Alert.alert('Registration Failed', message);
     } finally {
       setLoading(false);
     }
@@ -119,7 +90,10 @@ export function RegisterScreen({ navigation }: Props) {
               label="Full Name"
               placeholder="John Doe"
               value={displayName}
-              onChangeText={(t) => { setDisplayName(t); setErrors((e) => ({ ...e, displayName: undefined as any })); }}
+              onChangeText={(text) => {
+                setDisplayName(text);
+                setErrors((current) => ({ ...current, displayName: undefined }));
+              }}
               autoCapitalize="words"
               error={errors.displayName}
             />
@@ -128,7 +102,10 @@ export function RegisterScreen({ navigation }: Props) {
               label="Email"
               placeholder="you@example.com"
               value={email}
-              onChangeText={(t) => { setEmail(t); setErrors((e) => ({ ...e, email: undefined as any })); }}
+              onChangeText={(text) => {
+                setEmail(text);
+                setErrors((current) => ({ ...current, email: undefined }));
+              }}
               keyboardType="email-address"
               autoCapitalize="none"
               error={errors.email}
@@ -138,12 +115,13 @@ export function RegisterScreen({ navigation }: Props) {
               label="Password"
               placeholder="Min. 6 characters"
               value={password}
-              onChangeText={(t) => { setPassword(t); setErrors((e) => ({ ...e, password: undefined as any })); }}
+              onChangeText={(text) => {
+                setPassword(text);
+                setErrors((current) => ({ ...current, password: undefined }));
+              }}
               secureTextEntry={!showPassword}
               error={errors.password}
-              rightIcon={
-                <Text style={styles.showHide}>{showPassword ? 'Hide' : 'Show'}</Text>
-              }
+              rightIcon={<Text style={styles.showHide}>{showPassword ? 'Hide' : 'Show'}</Text>}
               onRightIconPress={() => setShowPassword(!showPassword)}
             />
 
@@ -151,16 +129,15 @@ export function RegisterScreen({ navigation }: Props) {
               label="Confirm Password"
               placeholder="Repeat password"
               value={confirmPassword}
-              onChangeText={(t) => { setConfirmPassword(t); setErrors((e) => ({ ...e, confirmPassword: undefined as any })); }}
+              onChangeText={(text) => {
+                setConfirmPassword(text);
+                setErrors((current) => ({ ...current, confirmPassword: undefined }));
+              }}
               secureTextEntry={!showPassword}
               error={errors.confirmPassword}
             />
 
-            <PrimaryButton
-              title="Create Account"
-              onPress={handleRegister}
-              loading={loading}
-            />
+            <PrimaryButton title="Create Account" onPress={handleRegister} loading={loading} />
           </View>
 
           <View style={styles.loginRow}>

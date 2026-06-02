@@ -1,25 +1,23 @@
-import React, { useState } from 'react';
+import React, { useEffect, useState } from 'react';
 import {
-  View,
-  Text,
-  StyleSheet,
-  ScrollView,
-  TouchableOpacity,
+  Alert,
   KeyboardAvoidingView,
   Platform,
-  Alert,
+  ScrollView,
+  StyleSheet,
+  Text,
+  TouchableOpacity,
+  View,
 } from 'react-native';
 import { LinearGradient } from 'expo-linear-gradient';
-import * as WebBrowser from 'expo-web-browser';
 import { NativeStackNavigationProp } from '@react-navigation/native-stack';
-import { useSignIn, useOAuth } from '@clerk/clerk-expo';
 import { AuthStackParamList } from '../../utils/types';
-import { useAuthStore } from '../../store/authStore';
 import { InputField, PrimaryButton } from '../../components/common';
+import { authService, googleAuthService, mapFirebaseAuthError, useGoogleAuthRequest, isGoogleAuthConfigured } from '../../services/auth';
+import { useAuthStore } from '../../store/authStore';
 import { Colors } from '../../theme';
 import { isValidEmail, isValidPassword } from '../../utils/helpers';
 
-// Simple icon components
 function MailIcon() {
   return (
     <View style={{ width: 20, height: 20, alignItems: 'center', justifyContent: 'center' }}>
@@ -41,65 +39,35 @@ type Props = {
   navigation: NativeStackNavigationProp<AuthStackParamList, 'Login'>;
 };
 
-WebBrowser.maybeCompleteAuthSession();
-
-function useWarmUpBrowser() {
-  React.useEffect(() => {
-    // Warm up the android browser to improve UX
-    // https://docs.expo.dev/guides/authentication/#warm-up-browser
-    void WebBrowser.warmUpAsync();
-    return () => {
-      void WebBrowser.coolDownAsync();
-    };
-  }, []);
-}
-
 export function LoginScreen({ navigation }: Props) {
-  useWarmUpBrowser();
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
   const [showPassword, setShowPassword] = useState(false);
   const [loading, setLoading] = useState(false);
+  const [googleLoading, setGoogleLoading] = useState(false);
   const [errors, setErrors] = useState<{ email?: string; password?: string }>({});
+  const { setUser, setError } = useAuthStore();
+  const [request, response, promptAsync] = useGoogleAuthRequest();
 
-  const { setError } = useAuthStore();
-  const { signIn, setActive, isLoaded } = useSignIn();
-
-  // Clerk OAuth hooks for Google and Apple
-  const { startOAuthFlow: startGoogleFlow } = useOAuth({ strategy: 'oauth_google' });
-  const { startOAuthFlow: startAppleFlow } = useOAuth({ strategy: 'oauth_apple' });
-
-  async function handleGoogleSignIn() {
-    try {
-      setLoading(true);
-      setError(null);
-      const { createdSessionId, setActive: setOAuthActive } = await startGoogleFlow();
-      if (createdSessionId && setOAuthActive) {
-        await setOAuthActive({ session: createdSessionId });
-      }
-    } catch (err: any) {
-      console.error('[Google OAuth Error]', err);
-      Alert.alert('Google Sign-In', 'An error occurred during Google sign-in. Please try again.');
-    } finally {
-      setLoading(false);
+  useEffect(() => {
+    if (response?.type !== 'success') return;
+    const idToken = response.authentication?.idToken;
+    if (!idToken) {
+      Alert.alert('Google Sign-In', 'Google did not return an ID token.');
+      // eslint-disable-next-line react-hooks/set-state-in-effect
+      setGoogleLoading(false);
+      return;
     }
-  }
 
-  async function handleAppleSignIn() {
-    try {
-      setLoading(true);
-      setError(null);
-      const { createdSessionId, setActive: setOAuthActive } = await startAppleFlow();
-      if (createdSessionId && setOAuthActive) {
-        await setOAuthActive({ session: createdSessionId });
-      }
-    } catch (err: any) {
-      console.error('[Apple OAuth Error]', err);
-      Alert.alert('Apple Sign-In', 'An error occurred during Apple sign-in. Please try again.');
-    } finally {
-      setLoading(false);
-    }
-  }
+    googleAuthService.signInWithIdToken(idToken)
+      .then(setUser)
+      .catch((error) => {
+        const message = mapFirebaseAuthError(error);
+        setError(message);
+        Alert.alert('Google Sign-In', message);
+      })
+      .finally(() => setGoogleLoading(false));
+  }, [response, setError, setUser]);
 
   function validate(): boolean {
     const newErrors: typeof errors = {};
@@ -115,41 +83,35 @@ export function LoginScreen({ navigation }: Props) {
   }
 
   async function handleLogin() {
-    if (!validate() || !isLoaded) return;
+    if (!validate()) return;
     setLoading(true);
     setError(null);
     try {
-      // Attempt sign-in via Clerk
-      const result = await signIn.create({
-        identifier: email.trim(),
-        password,
-      });
-
-      if (result.status === 'complete') {
-        // Activate the session
-        await setActive({ session: result.createdSessionId });
-      } else {
-        // MFA or other steps required — handle gracefully
-        Alert.alert('Login', 'Additional verification required. Please check your email.');
-      }
-    } catch (err: any) {
-      const clerkCode = err?.errors?.[0]?.code ?? '';
-      const msg =
-        clerkCode === 'form_password_incorrect' || clerkCode === 'form_identifier_not_found'
-          ? 'Invalid email or password'
-          : clerkCode === 'too_many_requests'
-          ? 'Too many attempts. Try again later.'
-          : 'Login failed. Please try again.';
-      setError(msg);
-      Alert.alert('Login Failed', msg);
+      const profile = await authService.loginWithEmail(email, password);
+      setUser(profile);
+    } catch (error) {
+      const message = mapFirebaseAuthError(error);
+      setError(message);
+      Alert.alert('Login Failed', message);
     } finally {
       setLoading(false);
     }
   }
 
+  async function handleGoogleSignIn() {
+    if (!request) {
+      Alert.alert('Google Sign-In', 'Google sign-in is not configured yet.');
+      return;
+    }
+
+    setGoogleLoading(true);
+    setError(null);
+    const result = await promptAsync();
+    if (result.type !== 'success') setGoogleLoading(false);
+  }
+
   return (
     <LinearGradient colors={['#0a0a0a', '#0f0f14', '#0a0a0a']} style={styles.container}>
-      {/* Background glows */}
       <View style={styles.glowTopRight} />
       <View style={styles.glowBottomLeft} />
 
@@ -162,19 +124,20 @@ export function LoginScreen({ navigation }: Props) {
           keyboardShouldPersistTaps="handled"
           showsVerticalScrollIndicator={false}
         >
-          {/* Header */}
           <View style={styles.header}>
             <Text style={styles.title}>Welcome back</Text>
             <Text style={styles.subtitle}>Sign in to find your next game</Text>
           </View>
 
-          {/* Form */}
           <View style={styles.form}>
             <InputField
               label="Email"
               placeholder="you@example.com"
               value={email}
-              onChangeText={(t) => { setEmail(t); setErrors((e) => ({ ...e, email: undefined })); }}
+              onChangeText={(text) => {
+                setEmail(text);
+                setErrors((current) => ({ ...current, email: undefined }));
+              }}
               keyboardType="email-address"
               autoCapitalize="none"
               autoComplete="email"
@@ -184,16 +147,17 @@ export function LoginScreen({ navigation }: Props) {
 
             <InputField
               label="Password"
-              placeholder="••••••••"
+              placeholder="Password"
               value={password}
-              onChangeText={(t) => { setPassword(t); setErrors((e) => ({ ...e, password: undefined })); }}
+              onChangeText={(text) => {
+                setPassword(text);
+                setErrors((current) => ({ ...current, password: undefined }));
+              }}
               secureTextEntry={!showPassword}
               autoComplete="password"
               error={errors.password}
               leftIcon={<LockIcon />}
-              rightIcon={
-                <Text style={styles.showHide}>{showPassword ? 'Hide' : 'Show'}</Text>
-              }
+              rightIcon={<Text style={styles.showHide}>{showPassword ? 'Hide' : 'Show'}</Text>}
               onRightIconPress={() => setShowPassword(!showPassword)}
             />
 
@@ -204,37 +168,27 @@ export function LoginScreen({ navigation }: Props) {
               <Text style={styles.forgotText}>Forgot password?</Text>
             </TouchableOpacity>
 
-            <PrimaryButton
-              title="Sign In"
-              onPress={handleLogin}
-              loading={loading}
-            />
+            <PrimaryButton title="Sign In" onPress={handleLogin} loading={loading} />
           </View>
 
-          {/* Divider */}
           <View style={styles.divider}>
             <View style={styles.dividerLine} />
             <Text style={styles.dividerText}>or continue with</Text>
             <View style={styles.dividerLine} />
           </View>
 
-          {/* Social buttons */}
           <View style={styles.socialButtons}>
-            <PrimaryButton
-              title="Continue with Google"
-              onPress={handleGoogleSignIn}
-              loading={loading}
-              variant="outline"
-            />
-            <PrimaryButton
-              title="Continue with Apple"
-              onPress={handleAppleSignIn}
-              loading={loading}
-              variant="outline"
-            />
+            {isGoogleAuthConfigured && (
+              <PrimaryButton
+                title="Continue with Google"
+                onPress={handleGoogleSignIn}
+                loading={googleLoading}
+                disabled={!request}
+                variant="outline"
+              />
+            )}
           </View>
 
-          {/* Sign up link */}
           <View style={styles.signupRow}>
             <Text style={styles.signupText}>{"Don't have an account? "}</Text>
             <TouchableOpacity onPress={() => navigation.navigate('Register')}>

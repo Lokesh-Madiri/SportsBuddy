@@ -83,7 +83,7 @@ export function ChatScreen({ navigation, route }: Props) {
   const { user } = useAuthStore();
   const [messages, setMessages] = useState<Message[]>(MOCK_MESSAGES);
   const [newMessage, setNewMessage] = useState('');
-  const [isTyping, setIsTyping] = useState(true);
+  const [isTyping] = useState(true);
   const flatListRef = useRef<FlatList>(null);
   const [dot1] = useState(() => new Animated.Value(0));
   const [dot2] = useState(() => new Animated.Value(0));

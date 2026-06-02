@@ -6,13 +6,12 @@ import {
   ScrollView,
   TouchableOpacity,
   TextInput,
-  FlatList,
   RefreshControl,
-  Animated,
 } from 'react-native';
 import { LinearGradient } from 'expo-linear-gradient';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { NativeStackNavigationProp } from '@react-navigation/native-stack';
+import { useNavigation } from '@react-navigation/native';
 import { HomeStackParamList } from '../utils/types';
 import { useAuthStore } from '../store/authStore';
 import { useEventsStore } from '../store/eventsStore';
@@ -20,8 +19,8 @@ import { subscribeToEvents } from '../firebase/firestore';
 import { aiService } from '../services/aiService';
 import { GlassCard, Avatar, Badge } from '../components/common';
 import { Colors, BorderRadius, Spacing } from '../theme';
-import { formatDate, timeAgo } from '../utils/helpers';
-import { SPORTS } from '../constants'; // still used by EventCard and MOCK_EVENTS
+import { formatDate } from '../utils/helpers';
+import { SPORTS } from '../constants';
 import type { SportEvent, AIRecommendation } from '../utils/types';
 
 type Props = {
@@ -30,9 +29,12 @@ type Props = {
 
 export function HomeScreen({ navigation }: Props) {
   const { user } = useAuthStore();
-  const { events, setEvents, getFilteredEvents, searchQuery, setSearchQuery } = useEventsStore();
+  // useNavigation gives access to the parent tab navigator for cross-tab navigation
+  const tabNavigation = useNavigation<any>();
+  const { setEvents, getFilteredEvents, searchQuery, setSearchQuery } = useEventsStore();
   const [aiPicks, setAiPicks] = useState<AIRecommendation[]>([]);
   const [refreshing, setRefreshing] = useState(false);
+  const [selectedSport, setSelectedSport] = useState<string | null>(null);
 
   const greeting = () => {
     const hour = new Date().getHours();
@@ -42,15 +44,13 @@ export function HomeScreen({ navigation }: Props) {
   };
 
   useEffect(() => {
-    // Subscribe to real-time events
     const unsubscribe = subscribeToEvents((liveEvents) => {
       setEvents(liveEvents);
     });
-
-    // Load AI picks
     aiService.getTeammateRecommendations(user || {}).then(setAiPicks);
-
     return unsubscribe;
+    // setEvents is a stable Zustand action; user is intentionally run once on mount
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
   const onRefresh = useCallback(async () => {
@@ -61,7 +61,10 @@ export function HomeScreen({ navigation }: Props) {
   }, [user]);
 
   const filteredEvents = getFilteredEvents();
-  const eventsToShow = filteredEvents.length > 0 ? filteredEvents : MOCK_EVENTS;
+  const displayEvents = selectedSport
+    ? filteredEvents.filter((e) => e.sport === selectedSport)
+    : filteredEvents;
+  const eventsToShow = displayEvents.length > 0 ? displayEvents : MOCK_EVENTS;
 
   return (
     <LinearGradient colors={['#0a0a0a', '#0f0f14', '#0a0a0a']} style={styles.container}>
@@ -83,7 +86,7 @@ export function HomeScreen({ navigation }: Props) {
               <Text style={styles.headerTitle}>Find Your Game</Text>
             </View>
             <TouchableOpacity
-              onPress={() => navigation.navigate('ProfileScreen' as any)}
+              onPress={() => tabNavigation.navigate('Profile')}
               style={styles.avatarButton}
             >
               <Avatar name={user?.displayName || 'User'} size={44} />
@@ -101,11 +104,40 @@ export function HomeScreen({ navigation }: Props) {
             />
           </View>
 
+          {/* Sports Categories */}
+          <View style={styles.section}>
+            <View style={styles.sectionHeader}>
+              <Text style={styles.sectionTitle}>Sports</Text>
+              <TouchableOpacity>
+                <Text style={styles.seeAll}>See all ›</Text>
+              </TouchableOpacity>
+            </View>
+            <ScrollView
+              horizontal
+              showsHorizontalScrollIndicator={false}
+              contentContainerStyle={styles.categoriesRow}
+            >
+              {SPORTS.map((sport) => (
+                <TouchableOpacity
+                  key={sport.id}
+                  onPress={() => setSelectedSport(selectedSport === sport.name ? null : sport.name)}
+                  style={[
+                    styles.sportCard,
+                    selectedSport === sport.name && styles.sportCardActive,
+                  ]}
+                >
+                  <Text style={styles.sportIcon}>{sport.icon}</Text>
+                  <Text style={styles.sportName}>{sport.name}</Text>
+                </TouchableOpacity>
+              ))}
+            </ScrollView>
+          </View>
+
           {/* Nearby Games */}
           <View style={styles.section}>
             <View style={styles.sectionHeader}>
               <Text style={styles.sectionTitle}>Nearby Games</Text>
-              <TouchableOpacity onPress={() => navigation.navigate('AllEvents' as any)}>
+              <TouchableOpacity onPress={() => navigation.navigate('AllEvents')}>
                 <Text style={styles.seeAll}>See all ›</Text>
               </TouchableOpacity>
             </View>
@@ -160,7 +192,6 @@ export function HomeScreen({ navigation }: Props) {
 
 // ─── Event Card ───────────────────────────────────────────────────────────────
 function EventCard({ event, onPress }: { event: SportEvent | typeof MOCK_EVENTS[0]; onPress: () => void }) {
-  const sport = SPORTS.find((s) => s.name === (event as any).sport);
   const players = (event as any).currentPlayers || (event as any).players || 0;
   const maxPlayers = (event as any).maxPlayers || 10;
   const location = typeof (event as any).location === 'string'
@@ -485,6 +516,32 @@ const styles = StyleSheet.create({
     fontSize: 11,
     color: Colors.primary,
     fontWeight: '500',
+  },
+  // Sport category cards
+  categoriesRow: {
+    paddingHorizontal: Spacing.lg,
+    gap: 12,
+  },
+  sportCard: {
+    width: 80,
+    height: 96,
+    borderRadius: BorderRadius.xl,
+    backgroundColor: Colors.glass,
+    borderWidth: 1,
+    borderColor: Colors.glassBorder,
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: 8,
+  },
+  sportCardActive: {
+    borderColor: Colors.primaryBorder,
+    backgroundColor: Colors.primaryDim,
+  },
+  sportIcon: { fontSize: 28 },
+  sportName: {
+    fontSize: 11,
+    color: Colors.foreground + 'cc',
+    textAlign: 'center',
   },
   fab: {
     position: 'absolute',

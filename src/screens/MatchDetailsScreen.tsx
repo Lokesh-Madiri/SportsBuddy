@@ -286,6 +286,14 @@ export function MatchDetailsScreen({ navigation, route }: Props) {
 
       {/* Join button */}
       <View style={styles.footer}>
+        {isParticipant && (
+          <PrimaryButton
+            title="Rate Players"
+            onPress={() => navigation.navigate('PostMatchRating', { eventId: event.id })}
+            variant="outline"
+            style={styles.rateButton}
+          />
+        )}
         <PrimaryButton
           title={isParticipant ? 'Leave Game' : isFull ? 'Game Full' : 'Join Game'}
           onPress={handleJoin}
@@ -580,5 +588,9 @@ const styles = StyleSheet.create({
     backgroundColor: Colors.glass,
     borderTopWidth: 1,
     borderTopColor: Colors.glassBorder,
+    gap: 10,
+  },
+  rateButton: {
+    height: 48,
   },
 });

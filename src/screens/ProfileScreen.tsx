@@ -1,43 +1,78 @@
-import React from 'react';
+import React, { useEffect, useState } from 'react';
 import {
-  View,
-  Text,
-  StyleSheet,
-  ScrollView,
-  TouchableOpacity,
   Alert,
+  ScrollView,
+  StyleSheet,
+  Text,
+  TouchableOpacity,
+  View,
 } from 'react-native';
 import { LinearGradient } from 'expo-linear-gradient';
 import { SafeAreaView } from 'react-native-safe-area-context';
-import { Ionicons, MaterialCommunityIcons } from '@expo/vector-icons';
-import { useClerk } from '@clerk/clerk-expo';
+import { Ionicons } from '@expo/vector-icons';
+import { NativeStackNavigationProp } from '@react-navigation/native-stack';
+import { Avatar, GlassCard, PrimaryButton } from '../components/common';
+import { ReviewCard, StarRating, TrustBadge, TrustSummaryCard } from '../components/ratings';
+import { AchievementBadges, MatchHistoryList, UserStatsCard } from '../components/profile';
+import { profileService, calculateAchievementBadges } from '../services/profileService';
+import { reputationService } from '../services/reputationService';
+import { authService } from '../services/auth';
 import { useAuthStore } from '../store/authStore';
-import { GlassCard, Avatar, PrimaryButton } from '../components/common';
-import { Colors, BorderRadius, Spacing } from '../theme';
+import { BorderRadius, Colors, Spacing } from '../theme';
+import type {
+  MatchHistoryItem,
+  ProfileStackParamList,
+  ReputationMetrics,
+  UserReview,
+} from '../utils/types';
 
-const MOCK_ACHIEVEMENTS: { id: string; name: string; iconSet: 'ion' | 'mci'; icon: string; earned: boolean }[] = [
-  { id: '1', name: 'First Game',    iconSet: 'ion', icon: 'game-controller-outline', earned: true },
-  { id: '2', name: 'Team Player',   iconSet: 'ion', icon: 'people-outline',          earned: true },
-  { id: '3', name: 'MVP',           iconSet: 'ion', icon: 'star-outline',            earned: true },
-  { id: '4', name: '10 Win Streak', iconSet: 'ion', icon: 'flame-outline',           earned: true },
-  { id: '5', name: 'Century',       iconSet: 'ion', icon: 'ribbon-outline',          earned: true },
-  { id: '6', name: 'Legend',        iconSet: 'mci', icon: 'crown-outline',           earned: false },
-];
+type Props = {
+  navigation: NativeStackNavigationProp<ProfileStackParamList, 'ProfileScreen'>;
+};
 
-const MOCK_MATCHES = [
-  { id: '1', sport: 'Basketball', result: 'Won', score: '52-48', date: '2 days ago' },
-  { id: '2', sport: 'Tennis', result: 'Won', score: '6-4, 6-3', date: '5 days ago' },
-  { id: '3', sport: 'Soccer', result: 'Lost', score: '2-3', date: '1 week ago' },
-];
-export function ProfileScreen() {
+export function ProfileScreen({ navigation }: Props) {
   const { user, logout } = useAuthStore();
-  const { signOut } = useClerk();
+  const [metrics, setMetrics] = useState<ReputationMetrics | null>(user?.reputation || null);
+  const [recentReviews, setRecentReviews] = useState<UserReview[]>([]);
+  const [matchHistory, setMatchHistory] = useState<MatchHistoryItem[]>(user?.completedMatches || []);
+  const [trustLoading, setTrustLoading] = useState(false);
 
-  const stats = [
-    { label: 'Games Played', value: String(user?.stats?.gamesPlayed || 127), icon: 'game-controller-outline' },
-    { label: 'Win Rate',     value: `${user?.stats?.winRate || 73}%`,         icon: 'trophy-outline' },
-    { label: 'Teammates',    value: String(user?.stats?.teammates || 89),     icon: 'people-outline' },
-  ] as const;
+  const imageURL = user?.imageURL || user?.profileImage || user?.photoURL;
+  const badges = user?.badges?.length
+    ? user.badges
+    : calculateAchievementBadges({ ...user, reputation: metrics || undefined });
+
+  useEffect(() => {
+    let mounted = true;
+    if (!user?.uid) return;
+
+    async function loadProfileData() {
+      setTrustLoading(true);
+      try {
+        const [snapshot, matches] = await Promise.all([
+          reputationService.getProfileTrustSnapshot(user!.uid),
+          profileService.getMatchHistory(user!.uid, 5),
+        ]);
+        if (mounted) {
+          setMetrics(snapshot.metrics);
+          setRecentReviews(snapshot.recentReviews);
+          setMatchHistory(matches.length ? matches : user?.completedMatches || []);
+        }
+      } catch {
+        if (mounted) {
+          setMetrics(user?.reputation || null);
+          setMatchHistory(user?.completedMatches || []);
+        }
+      } finally {
+        if (mounted) setTrustLoading(false);
+      }
+    }
+
+    loadProfileData();
+    return () => {
+      mounted = false;
+    };
+  }, [user]);
 
   async function handleLogout() {
     Alert.alert('Sign Out', 'Are you sure you want to sign out?', [
@@ -47,8 +82,8 @@ export function ProfileScreen() {
         style: 'destructive',
         onPress: async () => {
           try {
-            await signOut();  // End the Clerk session
-            logout();         // Clear local Zustand state
+            await authService.logout();
+            logout();
           } catch {
             Alert.alert('Error', 'Failed to sign out. Try again.');
           }
@@ -58,9 +93,8 @@ export function ProfileScreen() {
   }
 
   return (
-    <LinearGradient colors={['#0a0a0a', '#0f0f14', '#0a0a0a']} style={styles.container}>
+    <LinearGradient colors={Colors.gradientDark} style={styles.container}>
       <SafeAreaView style={styles.safeArea} edges={['top']}>
-        {/* Header */}
         <View style={styles.header}>
           <Text style={styles.headerTitle}>Profile</Text>
           <TouchableOpacity style={styles.settingsButton}>
@@ -69,32 +103,39 @@ export function ProfileScreen() {
         </View>
 
         <ScrollView showsVerticalScrollIndicator={false} contentContainerStyle={styles.scrollContent}>
-          {/* Profile Card */}
-          <GlassCard style={styles.profileCard}>
+          <GlassCard style={styles.profileCard} neonBorder={!!metrics?.trustedBadge}>
             <View style={styles.glowEffect} />
             <View style={styles.profileTop}>
-              <View style={styles.avatarContainer}>
-                <Avatar name={user?.displayName || 'User'} photoURL={user?.photoURL} size={80} />
-                <TouchableOpacity style={styles.editAvatarButton}>
+              <TouchableOpacity
+                activeOpacity={0.85}
+                onPress={() => navigation.navigate('EditProfile')}
+                style={styles.avatarContainer}
+              >
+                <Avatar name={user?.displayName || 'User'} photoURL={imageURL} size={82} />
+                <View style={styles.editAvatarButton}>
                   <Ionicons name="pencil" size={12} color={Colors.primaryForeground} />
-                </TouchableOpacity>
-              </View>
+                </View>
+              </TouchableOpacity>
+
               <View style={styles.profileInfo}>
                 <View style={styles.nameRow}>
-                  <Text style={styles.displayName}>{user?.displayName || 'John Doe'}</Text>
+                  <Text style={styles.displayName}>{user?.displayName || 'SportsBuddy Player'}</Text>
+                  {metrics && <TrustBadge level={metrics.trustLevel} trusted={metrics.trustedBadge} />}
                 </View>
-                <Text style={styles.username}>@{user?.username || user?.displayName?.toLowerCase().replace(' ', '') || 'user'}</Text>
+                <Text style={styles.username}>
+                  @{user?.username || user?.displayName?.toLowerCase().replace(/\s+/g, '') || 'player'}
+                </Text>
+                {!!user?.favoriteSport && <Text style={styles.favoriteSport}>{user.favoriteSport} main</Text>}
                 <View style={styles.ratingRow}>
-                  <Ionicons name="star" size={14} color={Colors.primary} />
-                  <Text style={styles.rating}>{user?.rating || 4.9}</Text>
-                  <Text style={styles.reviewCount}>({user?.reviewCount || 127} reviews)</Text>
+                  <StarRating value={metrics?.averageRating || user?.rating || 0} readonly size={14} />
+                  <Text style={styles.rating}>{(metrics?.averageRating || user?.rating || 0).toFixed(1)}</Text>
+                  <Text style={styles.reviewCount}>({metrics?.reviewCount || user?.reviewCount || 0} reviews)</Text>
                 </View>
               </View>
             </View>
 
-            {/* Sports tags */}
             <View style={styles.sportsRow}>
-              {(user?.sports?.length ? user.sports : ['Basketball', 'Tennis', 'Soccer', 'Running']).map((sport) => (
+              {(user?.sports?.length ? user.sports : ['Basketball', 'Tennis', 'Running']).map((sport) => (
                 <View key={sport} style={styles.sportTag}>
                   <Text style={styles.sportTagText}>{sport}</Text>
                 </View>
@@ -102,99 +143,83 @@ export function ProfileScreen() {
             </View>
           </GlassCard>
 
-          {/* Stats */}
-          <View style={styles.statsGrid}>
-            {stats.map((stat) => (
-              <GlassCard key={stat.label} style={styles.statCard}>
-                <View style={styles.statIconBox}>
-                  <Ionicons name={stat.icon} size={20} color={Colors.primary} />
-                </View>
-                <Text style={styles.statValue}>{stat.value}</Text>
-                <Text style={styles.statLabel}>{stat.label}</Text>
-              </GlassCard>
-            ))}
-          </View>
+          {!!(user?.bio || user?.sportsPersonality) && (
+            <GlassCard style={styles.bioCard}>
+              {!!user.bio && <Text style={styles.bioText}>{user.bio}</Text>}
+              {!!user.sportsPersonality && (
+                <Text style={styles.personalityText}>{user.sportsPersonality}</Text>
+              )}
+            </GlassCard>
+          )}
 
-          {/* Achievements */}
+          <UserStatsCard user={user} metrics={metrics} />
+
+          {metrics && <TrustSummaryCard metrics={metrics} />}
+
+          {!!user?.availability && (
+            <GlassCard style={styles.availabilityCard}>
+              <View style={styles.availabilityHeader}>
+                <Text style={styles.sectionTitle}>Availability</Text>
+                {user.availability.weekendOnly && <Text style={styles.weekendBadge}>Weekend</Text>}
+              </View>
+              <Text style={styles.availabilityText}>
+                {(user.availability.availableDays || []).length
+                  ? user.availability.availableDays.join(', ')
+                  : 'No days selected'}
+              </Text>
+              <Text style={styles.availabilitySubtext}>
+                {(user.availability.availableTimeSlots || []).length
+                  ? user.availability.availableTimeSlots.join(' / ')
+                  : 'No preferred times selected'}
+              </Text>
+            </GlassCard>
+          )}
+
           <View style={styles.section}>
             <View style={styles.sectionHeader}>
               <Text style={styles.sectionTitle}>Achievements</Text>
-              <TouchableOpacity>
-                <Text style={styles.seeAll}>See all ›</Text>
-              </TouchableOpacity>
+              <Text style={styles.seeAll}>{badges.filter((badge) => badge.earned).length}/{badges.length}</Text>
             </View>
-            <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.achievementsRow}>
-              {MOCK_ACHIEVEMENTS.map((a) => (
-                <View
-                  key={a.id}
-                  style={[styles.achievementCard, !a.earned && styles.achievementCardLocked]}
-                >
-                  <View style={[styles.achievementIconBox, !a.earned && styles.achievementIconBoxLocked]}>
-                    {a.iconSet === 'ion'
-                      ? <Ionicons name={a.icon as React.ComponentProps<typeof Ionicons>['name']} size={22} color={a.earned ? Colors.primary : Colors.mutedForeground + '40'} />
-                      : <MaterialCommunityIcons name={a.icon as React.ComponentProps<typeof MaterialCommunityIcons>['name']} size={22} color={a.earned ? Colors.primary : Colors.mutedForeground + '40'} />
-                    }
-                  </View>
-                  <Text style={[styles.achievementName, !a.earned && styles.achievementNameLocked]}>
-                    {a.name}
-                  </Text>
-                </View>
-              ))}
-            </ScrollView>
+            <AchievementBadges badges={badges} />
           </View>
 
-          {/* Match History */}
+          <View style={styles.section}>
+            <View style={styles.sectionHeader}>
+              <Text style={styles.sectionTitle}>Community Reviews</Text>
+              <Text style={styles.seeAll}>
+                {trustLoading ? 'Loading' : `${recentReviews.length} recent`}
+              </Text>
+            </View>
+            <View style={styles.listGap}>
+              {recentReviews.length > 0 ? (
+                recentReviews.map((review) => <ReviewCard key={review.id} review={review} />)
+              ) : (
+                <GlassCard style={styles.emptyCard}>
+                  <Ionicons name="chatbubble-ellipses-outline" size={22} color={Colors.primary} />
+                  <View style={styles.emptyText}>
+                    <Text style={styles.emptyTitle}>No reviews yet</Text>
+                    <Text style={styles.emptySubtitle}>Post-match feedback will appear here.</Text>
+                  </View>
+                </GlassCard>
+              )}
+            </View>
+          </View>
+
           <View style={styles.section}>
             <View style={styles.sectionHeader}>
               <Text style={styles.sectionTitle}>Match History</Text>
-              <TouchableOpacity>
-                <Text style={styles.seeAll}>See all ›</Text>
-              </TouchableOpacity>
+              <Text style={styles.seeAll}>{matchHistory.length} recent</Text>
             </View>
-            <View style={styles.matchList}>
-              {MOCK_MATCHES.map((match) => (
-                <GlassCard key={match.id} style={styles.matchCard}>
-                  <View
-                    style={[
-                      styles.matchResultIcon,
-                      { backgroundColor: match.result === 'Won' ? 'rgba(34,197,94,0.1)' : 'rgba(239,68,68,0.1)' },
-                    ]}
-                  >
-                    <Ionicons
-                      name={match.result === 'Won' ? 'checkmark-circle' : 'close-circle'}
-                      size={22}
-                      color={match.result === 'Won' ? Colors.success : Colors.error}
-                    />
-                  </View>
-                  <View style={styles.matchInfo}>
-                    <Text style={styles.matchSport}>{match.sport}</Text>
-                    <Text style={styles.matchDate}>{match.date}</Text>
-                  </View>
-                  <View style={styles.matchResult}>
-                    <Text
-                      style={[
-                        styles.matchResultText,
-                        { color: match.result === 'Won' ? Colors.success : Colors.error },
-                      ]}
-                    >
-                      {match.result}
-                    </Text>
-                    <Text style={styles.matchScore}>{match.score}</Text>
-                  </View>
-                </GlassCard>
-              ))}
-            </View>
+            <MatchHistoryList matches={matchHistory} />
           </View>
 
-          {/* Edit Profile */}
           <PrimaryButton
             title="Edit Profile"
-            onPress={() => Alert.alert('Coming Soon', 'Profile editing will be available soon.')}
+            onPress={() => navigation.navigate('EditProfile')}
             variant="outline"
             style={styles.editButton}
           />
 
-          {/* Sign Out */}
           <TouchableOpacity onPress={handleLogout} style={styles.signOutButton}>
             <Text style={styles.signOutText}>Sign Out</Text>
           </TouchableOpacity>
@@ -217,7 +242,7 @@ const styles = StyleSheet.create({
   },
   headerTitle: {
     fontSize: 20,
-    fontWeight: '700',
+    fontWeight: '800',
     color: Colors.foreground,
   },
   settingsButton: {
@@ -234,7 +259,7 @@ const styles = StyleSheet.create({
     gap: 16,
   },
   profileCard: {
-    padding: 24,
+    padding: 22,
     overflow: 'hidden',
   },
   glowEffect: {
@@ -269,16 +294,23 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     gap: 6,
     marginBottom: 4,
+    flexWrap: 'wrap',
   },
   displayName: {
     fontSize: 20,
-    fontWeight: '700',
+    fontWeight: '800',
     color: Colors.foreground,
   },
   username: {
     fontSize: 13,
     color: Colors.mutedForeground,
-    marginBottom: 8,
+    marginBottom: 6,
+  },
+  favoriteSport: {
+    fontSize: 11,
+    color: Colors.primary,
+    fontWeight: '800',
+    marginBottom: 7,
   },
   ratingRow: {
     flexDirection: 'row',
@@ -287,7 +319,7 @@ const styles = StyleSheet.create({
   },
   rating: {
     fontSize: 15,
-    fontWeight: '600',
+    fontWeight: '700',
     color: Colors.foreground,
   },
   reviewCount: {
@@ -311,34 +343,46 @@ const styles = StyleSheet.create({
     fontSize: 12,
     color: Colors.foreground,
   },
-  statsGrid: {
-    flexDirection: 'row',
-    gap: 12,
-  },
-  statCard: {
-    flex: 1,
+  bioCard: {
     padding: 16,
-    alignItems: 'center',
-    gap: 4,
+    gap: 8,
   },
-  statIconBox: {
-    width: 40,
-    height: 40,
-    borderRadius: BorderRadius.md,
-    backgroundColor: Colors.primaryDim,
-    alignItems: 'center',
-    justifyContent: 'center',
-    marginBottom: 4,
-  },
-  statValue: {
-    fontSize: 20,
-    fontWeight: '700',
+  bioText: {
+    fontSize: 14,
+    lineHeight: 21,
     color: Colors.foreground,
   },
-  statLabel: {
-    fontSize: 10,
+  personalityText: {
+    fontSize: 12,
+    lineHeight: 18,
     color: Colors.mutedForeground,
-    textAlign: 'center',
+  },
+  availabilityCard: {
+    padding: 16,
+    gap: 6,
+  },
+  availabilityHeader: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+  },
+  availabilityText: {
+    fontSize: 14,
+    fontWeight: '800',
+    color: Colors.foreground,
+  },
+  availabilitySubtext: {
+    fontSize: 12,
+    color: Colors.mutedForeground,
+  },
+  weekendBadge: {
+    fontSize: 11,
+    fontWeight: '800',
+    color: Colors.primary,
+    backgroundColor: Colors.primaryDim,
+    paddingHorizontal: 10,
+    paddingVertical: 4,
+    borderRadius: BorderRadius.full,
   },
   section: {},
   sectionHeader: {
@@ -349,86 +393,31 @@ const styles = StyleSheet.create({
   },
   sectionTitle: {
     fontSize: 17,
-    fontWeight: '600',
+    fontWeight: '800',
     color: Colors.foreground,
   },
   seeAll: {
     fontSize: 13,
     color: Colors.primary,
+    fontWeight: '700',
   },
-  achievementsRow: {
-    gap: 12,
-  },
-  achievementCard: {
-    width: 88,
-    height: 88,
-    borderRadius: BorderRadius.xl,
-    backgroundColor: Colors.glass,
-    borderWidth: 1,
-    borderColor: Colors.glassBorder,
-    alignItems: 'center',
-    justifyContent: 'center',
-    gap: 6,
-    paddingHorizontal: 8,
-  },
-  achievementCardLocked: {
-    backgroundColor: 'rgba(24,24,30,0.3)',
-    borderColor: Colors.border + '40',
-  },
-  achievementIconBox: {
-    width: 36,
-    height: 36,
-    borderRadius: 18,
-    backgroundColor: Colors.primaryDim,
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
-  achievementIconBoxLocked: {
-    backgroundColor: Colors.secondary,
-  },
-  achievementName: {
-    fontSize: 10,
-    color: Colors.foreground,
-    textAlign: 'center',
-    paddingHorizontal: 4,
-  },
-  achievementNameLocked: {
-    color: Colors.mutedForeground + '60',
-  },
-  matchList: { gap: 10 },
-  matchCard: {
+  listGap: { gap: 10 },
+  emptyCard: {
     flexDirection: 'row',
     alignItems: 'center',
     padding: 16,
     gap: 12,
   },
-  matchResultIcon: {
-    width: 40,
-    height: 40,
-    borderRadius: BorderRadius.md,
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
-  matchInfo: { flex: 1 },
-  matchSport: {
+  emptyText: { flex: 1 },
+  emptyTitle: {
     fontSize: 14,
-    fontWeight: '600',
+    fontWeight: '800',
     color: Colors.foreground,
   },
-  matchDate: {
+  emptySubtitle: {
+    marginTop: 2,
     fontSize: 12,
     color: Colors.mutedForeground,
-    marginTop: 2,
-  },
-  matchResult: { alignItems: 'flex-end' },
-  matchResultText: {
-    fontSize: 14,
-    fontWeight: '600',
-  },
-  matchScore: {
-    fontSize: 12,
-    color: Colors.mutedForeground,
-    marginTop: 2,
   },
   editButton: { marginTop: 4 },
   signOutButton: {
@@ -438,6 +427,6 @@ const styles = StyleSheet.create({
   signOutText: {
     fontSize: 15,
     color: Colors.error,
-    fontWeight: '500',
+    fontWeight: '700',
   },
 });

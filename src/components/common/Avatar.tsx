@@ -1,6 +1,6 @@
 import React from 'react';
 import { View, Text, StyleSheet, Image } from 'react-native';
-import { Colors, BorderRadius } from '../../theme';
+import { Colors } from '../../theme';
 import { getInitials, getAvatarColor } from '../../utils/helpers';
 
 interface AvatarProps {

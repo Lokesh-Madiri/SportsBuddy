@@ -11,6 +11,13 @@ import { userBehaviorService } from './userBehaviorService';
 const CACHE_TTL_MS = 3 * 60 * 1000;
 const recommendationCache = new Map<string, { data: TeammateRecommendation[]; expiresAt: number }>();
 
+// Strip undefined values from an object before writing to Firestore
+function stripUndefined<T extends Record<string, unknown>>(obj: T): Partial<T> {
+  return Object.fromEntries(
+    Object.entries(obj).filter(([, v]) => v !== undefined)
+  ) as Partial<T>;
+}
+
 export const recommendationService = {
   async getTeammateRecommendations(
     user: Partial<User>,
@@ -61,10 +68,15 @@ export const recommendationService = {
       doc(db, FIRESTORE_COLLECTIONS.RECOMMENDATIONS, userId),
       {
         userId,
-        teammates: recommendations.map((recommendation) => ({
-          ...recommendation,
-          lastActiveAt: recommendation.lastActiveAt || null,
-        })),
+        // Strip any undefined fields — Firestore rejects them
+        teammates: recommendations.map((rec) =>
+          stripUndefined({
+            ...rec,
+            avatar: rec.avatar ?? null,
+            distanceMiles: rec.distanceMiles ?? null,
+            lastActiveAt: rec.lastActiveAt ?? null,
+          })
+        ),
         updatedAt: serverTimestamp(),
       },
       { merge: true }

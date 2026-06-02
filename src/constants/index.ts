@@ -23,6 +23,10 @@ export const FIRESTORE_COLLECTIONS = {
   MESSAGES: 'messages',
   NOTIFICATIONS: 'notifications',
   REVIEWS: 'reviews',
+  USER_RATINGS: 'userRatings',
+  REPUTATION_METRICS: 'reputationMetrics',
+  AI_CHATS: 'aiChats',
+  AI_MESSAGES: 'aiMessages',
   USER_BEHAVIOR: 'userBehavior',
   RECOMMENDATIONS: 'recommendations',
 };
@@ -34,9 +38,10 @@ export const STORAGE_KEYS = {
 };
 
 export const AI_CONFIG = {
-  // OpenAI integration point - replace with actual key when ready
-  API_KEY: process.env.EXPO_PUBLIC_OPENAI_API_KEY || '',
-  MODEL: 'gpt-4o-mini',
+  OPENAI_API_KEY: process.env.EXPO_PUBLIC_OPENAI_API_KEY || '',
+  OPENROUTER_API_KEY: process.env.EXPO_PUBLIC_OPENROUTER_API_KEY || '',
+  PROVIDER: process.env.EXPO_PUBLIC_AI_PROVIDER || 'openai',
+  MODEL: process.env.EXPO_PUBLIC_AI_MODEL || 'gpt-4o-mini',
   MAX_TOKENS: 500,
 };
 
