@@ -1,140 +1,335 @@
-import React, { useState } from 'react';
+import React, { useCallback, useMemo } from 'react';
 import {
-  View,
-  Text,
+  FlatList,
+  RefreshControl,
   StyleSheet,
-  ScrollView,
+  Text,
   TouchableOpacity,
-  TextInput,
+  View,
 } from 'react-native';
 import { LinearGradient } from 'expo-linear-gradient';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { NativeStackNavigationProp } from '@react-navigation/native-stack';
+import { Ionicons } from '@expo/vector-icons';
+
 import { DiscoverStackParamList } from '../utils/types';
-import { GlassCard, Badge } from '../components/common';
-import { Colors, BorderRadius, Spacing } from '../theme';
-import { SPORTS, SKILL_LEVELS } from '../constants';
+import { useDiscoverStore } from '../store/discoverStore';
+import { useDiscovery } from '../hooks/useDiscovery';
+import {
+  SearchBar,
+  SportFilterChips,
+  EventDiscoveryCard,
+  NearbyPlayerCard,
+  TrendingEventCard,
+  FilterBottomSheet,
+  EventSkeletonCard,
+  PlayerSkeletonCard,
+  EmptyState,
+} from '../components/discover';
+import { Colors, Spacing, BorderRadius } from '../theme';
+import type { NearbyUser } from '../services/location/locationTypes';
+import type { SportEvent } from '../utils/types';
+import type { TrendingEvent } from '../services/search/searchService';
 
 type Props = {
   navigation: NativeStackNavigationProp<DiscoverStackParamList, 'DiscoverScreen'>;
 };
 
-const ALL_EVENTS = [
-  { id: '1', sport: 'Basketball', title: '5v5 Pickup Game', location: 'Central Park', date: 'Today, 6 PM', players: 6, maxPlayers: 10, skillLevel: 'Intermediate', distance: '0.8 mi' },
-  { id: '2', sport: 'Soccer', title: 'Weekend Kickabout', location: 'Riverside Fields', date: 'Tomorrow, 4 PM', players: 14, maxPlayers: 22, skillLevel: 'All Levels', distance: '1.2 mi' },
-  { id: '3', sport: 'Tennis', title: 'Doubles Match', location: 'City Tennis Club', date: 'Sat, 10 AM', players: 2, maxPlayers: 4, skillLevel: 'Advanced', distance: '0.5 mi' },
-  { id: '4', sport: 'Running', title: 'Morning 5K Run', location: 'Lakeside Trail', date: 'Sun, 7 AM', players: 8, maxPlayers: 20, skillLevel: 'Beginner', distance: '2.1 mi' },
-  { id: '5', sport: 'Volleyball', title: 'Beach Volleyball', location: 'City Beach', date: 'Sat, 2 PM', players: 10, maxPlayers: 12, skillLevel: 'Intermediate', distance: '3.4 mi' },
-  { id: '6', sport: 'Basketball', title: '3v3 Tournament', location: 'Sports Complex', date: 'Next Mon, 5 PM', players: 18, maxPlayers: 24, skillLevel: 'Advanced', distance: '1.8 mi' },
+type DiscoverTab = 'events' | 'players' | 'trending';
+
+const TABS: { key: DiscoverTab; label: string; icon: string }[] = [
+  { key: 'events', label: 'Events', icon: '🏆' },
+  { key: 'players', label: 'Players', icon: '👥' },
+  { key: 'trending', label: 'Trending', icon: '🔥' },
 ];
 
+const SKELETON_COUNT = 4;
+
 export function DiscoverScreen({ navigation }: Props) {
-  const [search, setSearch] = useState('');
-  const [selectedSport, setSelectedSport] = useState<string | null>(null);
-  const [selectedSkill, setSelectedSkill] = useState<string | null>(null);
+  const {
+    searchQuery, setSearchQuery,
+    selectedSport, setSelectedSport,
+    selectedSkillLevel, setSelectedSkillLevel,
+    radiusKm, setRadiusKm,
+    activeTab, setActiveTab,
+    events, nearbyEvents, players, trending,
+    isLoadingEvents, isLoadingPlayers, isLoadingTrending,
+    filterSheetOpen, setFilterSheetOpen,
+    resetFilters,
+    userLocation,
+  } = useDiscoverStore();
 
-  const filtered = ALL_EVENTS.filter((e) => {
-    const matchSearch = !search || e.title.toLowerCase().includes(search.toLowerCase()) || e.sport.toLowerCase().includes(search.toLowerCase());
-    const matchSport = !selectedSport || e.sport === selectedSport;
-    const matchSkill = !selectedSkill || e.skillLevel === selectedSkill;
-    return matchSearch && matchSport && matchSkill;
-  });
+  const { getCompatibility, runSearch } = useDiscovery();
 
-  return (
-    <LinearGradient colors={['#0a0a0a', '#0f0f14', '#0a0a0a']} style={styles.container}>
-      <SafeAreaView style={styles.safeArea} edges={['top']}>
-        <View style={styles.header}>
-          <Text style={styles.title}>Discover</Text>
-          <Text style={styles.subtitle}>Find games near you</Text>
+  const hasActiveFilters = !!(selectedSport || selectedSkillLevel || radiusKm !== 25);
+
+  // Use nearby events (with distance) when location available, else flat events
+  const displayEvents = useMemo(
+    () => (nearbyEvents.length > 0 ? nearbyEvents : events) as SportEvent[],
+    [nearbyEvents, events]
+  );
+
+  // ─── Render items ──────────────────────────────────────────────────────────
+  const renderEvent = useCallback(
+    ({ item }: { item: SportEvent }) => (
+      <EventDiscoveryCard
+        event={item}
+        showDistance={!!userLocation}
+        onPress={() => navigation.navigate('MatchDetails', { eventId: item.id })}
+        onJoin={() => navigation.navigate('MatchDetails', { eventId: item.id })}
+      />
+    ),
+    [navigation, userLocation]
+  );
+
+  const renderPlayer = useCallback(
+    ({ item }: { item: NearbyUser }) => (
+      <NearbyPlayerCard
+        player={item}
+        compatibilityScore={getCompatibility(item.uid, item)}
+        onPress={() => {/* navigate to player profile when ready */}}
+      />
+    ),
+    [getCompatibility]
+  );
+
+  const renderTrending = useCallback(
+    ({ item, index }: { item: TrendingEvent; index: number }) => (
+      <TrendingEventCard
+        item={item}
+        rank={index + 1}
+        onPress={() => navigation.navigate('MatchDetails', { eventId: item.event.id })}
+      />
+    ),
+    [navigation]
+  );
+
+  const renderEventSkeleton = () => (
+    <>
+      {Array.from({ length: SKELETON_COUNT }).map((_, i) => (
+        <EventSkeletonCard key={i} />
+      ))}
+    </>
+  );
+
+  const renderPlayerSkeleton = () => (
+    <>
+      {Array.from({ length: SKELETON_COUNT }).map((_, i) => (
+        <PlayerSkeletonCard key={i} />
+      ))}
+    </>
+  );
+
+  // ─── List header (search + tabs + sport chips) ─────────────────────────────
+  const ListHeader = useMemo(() => (
+    <View>
+      {/* Page title */}
+      <View style={styles.pageHeader}>
+        <View>
+          <Text style={styles.pageTitle}>Discover</Text>
+          <Text style={styles.pageSubtitle}>
+            {userLocation ? 'Showing results near you' : 'Find games & players'}
+          </Text>
         </View>
+        {userLocation && (
+          <View style={styles.locationChip}>
+            <Ionicons name="location" size={12} color={Colors.primary} />
+            <Text style={styles.locationText}>Live</Text>
+          </View>
+        )}
+      </View>
 
-        {/* Search */}
-        <View style={styles.searchContainer}>
-          <TextInput
-            style={styles.searchInput}
-            placeholder="Search events..."
-            placeholderTextColor={Colors.mutedForeground + '80'}
-            value={search}
-            onChangeText={setSearch}
+      {/* Search bar */}
+      <SearchBar
+        value={searchQuery}
+        onChangeText={setSearchQuery}
+        onClear={() => setSearchQuery('')}
+        onFilterPress={() => setFilterSheetOpen(true)}
+        hasActiveFilters={hasActiveFilters}
+      />
+
+      {/* Tab switcher */}
+      <View style={styles.tabs}>
+        {TABS.map((tab) => (
+          <TouchableOpacity
+            key={tab.key}
+            onPress={() => setActiveTab(tab.key)}
+            style={[styles.tab, activeTab === tab.key && styles.tabActive]}
+            activeOpacity={0.75}
+          >
+            <Text style={styles.tabIcon}>{tab.icon}</Text>
+            <Text style={[styles.tabLabel, activeTab === tab.key && styles.tabLabelActive]}>
+              {tab.label}
+            </Text>
+          </TouchableOpacity>
+        ))}
+      </View>
+
+      {/* Sport chips (events & trending only) */}
+      {activeTab !== 'players' && (
+        <View style={styles.chipsWrapper}>
+          <SportFilterChips
+            selected={selectedSport}
+            onSelect={setSelectedSport}
           />
         </View>
+      )}
 
-        <ScrollView showsVerticalScrollIndicator={false}>
-          {/* Sport filter */}
-          <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.filterRow}>
-            <TouchableOpacity
-              onPress={() => setSelectedSport(null)}
-              style={[styles.filterChip, !selectedSport && styles.filterChipActive]}
-            >
-              <Text style={[styles.filterChipText, !selectedSport && styles.filterChipTextActive]}>All</Text>
-            </TouchableOpacity>
-            {SPORTS.slice(0, 6).map((s) => (
-              <TouchableOpacity
-                key={s.id}
-                onPress={() => setSelectedSport(selectedSport === s.name ? null : s.name)}
-                style={[styles.filterChip, selectedSport === s.name && styles.filterChipActive]}
-              >
-                <Text style={[styles.filterChipText, selectedSport === s.name && styles.filterChipTextActive]}>
-                  {s.name}
-                </Text>
-              </TouchableOpacity>
-            ))}
-          </ScrollView>
+      {/* Results count */}
+      <View style={styles.resultsRow}>
+        <Text style={styles.resultsCount}>
+          {activeTab === 'events' && `${displayEvents.length} event${displayEvents.length !== 1 ? 's' : ''}`}
+          {activeTab === 'players' && `${players.length} player${players.length !== 1 ? 's' : ''}`}
+          {activeTab === 'trending' && `${trending.length} trending`}
+        </Text>
+        {hasActiveFilters && (
+          <TouchableOpacity onPress={resetFilters}>
+            <Text style={styles.clearFilters}>Clear filters ×</Text>
+          </TouchableOpacity>
+        )}
+      </View>
+    </View>
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  ), [
+    searchQuery, activeTab, selectedSport, displayEvents.length,
+    players.length, trending.length, hasActiveFilters, userLocation,
+  ]);
 
-          {/* Skill filter */}
-          <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.filterRow}>
-            <TouchableOpacity
-              onPress={() => setSelectedSkill(null)}
-              style={[styles.filterChip, !selectedSkill && styles.filterChipActive]}
-            >
-              <Text style={[styles.filterChipText, !selectedSkill && styles.filterChipTextActive]}>Any Level</Text>
-            </TouchableOpacity>
-            {SKILL_LEVELS.map((level) => (
-              <TouchableOpacity
-                key={level}
-                onPress={() => setSelectedSkill(selectedSkill === level ? null : level)}
-                style={[styles.filterChip, selectedSkill === level && styles.filterChipActive]}
-              >
-                <Text style={[styles.filterChipText, selectedSkill === level && styles.filterChipTextActive]}>
-                  {level}
-                </Text>
-              </TouchableOpacity>
-            ))}
-          </ScrollView>
+  // ─── Content by tab ────────────────────────────────────────────────────────
+  if (activeTab === 'events') {
+    const isLoading = isLoadingEvents;
+    return (
+      <LinearGradient colors={Colors.gradientDark} style={styles.container}>
+        <SafeAreaView style={styles.safeArea} edges={['top']}>
+          <FlatList
+            data={isLoading ? [] : displayEvents}
+            keyExtractor={(item) => item.id}
+            renderItem={renderEvent}
+            ListHeaderComponent={ListHeader}
+            ListEmptyComponent={
+              isLoading
+                ? renderEventSkeleton()
+                : (
+                  <EmptyState
+                    icon="🏟️"
+                    title="No events found"
+                    subtitle={hasActiveFilters ? 'Try adjusting your filters' : 'Be the first to create a game!'}
+                    actionLabel={hasActiveFilters ? 'Clear Filters' : undefined}
+                    onAction={hasActiveFilters ? resetFilters : undefined}
+                  />
+                )
+            }
+            contentContainerStyle={styles.listContent}
+            showsVerticalScrollIndicator={false}
+            refreshControl={
+              <RefreshControl
+                refreshing={isLoading}
+                onRefresh={runSearch}
+                tintColor={Colors.primary}
+              />
+            }
+            ItemSeparatorComponent={() => <View style={styles.separator} />}
+          />
+          <FilterBottomSheet
+            visible={filterSheetOpen}
+            selectedSport={selectedSport}
+            selectedSkillLevel={selectedSkillLevel}
+            radiusKm={radiusKm}
+            onSportChange={setSelectedSport}
+            onSkillChange={setSelectedSkillLevel}
+            onRadiusChange={setRadiusKm}
+            onApply={() => setFilterSheetOpen(false)}
+            onReset={resetFilters}
+            onClose={() => setFilterSheetOpen(false)}
+          />
+        </SafeAreaView>
+      </LinearGradient>
+    );
+  }
 
-          {/* Results */}
-          <View style={styles.results}>
-            <Text style={styles.resultsCount}>{filtered.length} events found</Text>
-            {filtered.map((event) => (
-              <TouchableOpacity
-                key={event.id}
-                onPress={() => navigation.navigate('MatchDetails', { eventId: event.id })}
-                activeOpacity={0.85}
-              >
-                <GlassCard style={styles.eventCard}>
-                  <View style={styles.eventTop}>
-                    <View style={styles.eventLeft}>
-                      <Text style={styles.eventSport}>{event.sport}</Text>
-                      <Text style={styles.eventTitle}>{event.title}</Text>
-                      <View style={styles.locationRow}>
-                        <Text style={styles.locationText}>{event.location}</Text>
-                        <Text style={styles.distanceText}>· {event.distance}</Text>
-                      </View>
-                    </View>
-                    <Badge label={event.skillLevel} />
-                  </View>
-                  <View style={styles.eventBottom}>
-                    <Text style={styles.eventMeta}>{event.date}</Text>
-                    <Text style={styles.eventMeta}>{event.players}/{event.maxPlayers} players</Text>
-                    <View style={styles.joinButton}>
-                      <Text style={styles.joinButtonText}>Join</Text>
-                    </View>
-                  </View>
-                </GlassCard>
-              </TouchableOpacity>
-            ))}
-          </View>
-        </ScrollView>
+  if (activeTab === 'players') {
+    const isLoading = isLoadingPlayers;
+    return (
+      <LinearGradient colors={Colors.gradientDark} style={styles.container}>
+        <SafeAreaView style={styles.safeArea} edges={['top']}>
+          <FlatList
+            data={isLoading ? [] : players}
+            keyExtractor={(item) => item.uid}
+            renderItem={renderPlayer}
+            ListHeaderComponent={ListHeader}
+            ListEmptyComponent={
+              isLoading
+                ? renderPlayerSkeleton()
+                : (
+                  <EmptyState
+                    icon="👥"
+                    title="No players found"
+                    subtitle="Try expanding your search radius or changing filters"
+                    actionLabel={hasActiveFilters ? 'Clear Filters' : undefined}
+                    onAction={hasActiveFilters ? resetFilters : undefined}
+                  />
+                )
+            }
+            contentContainerStyle={styles.listContent}
+            showsVerticalScrollIndicator={false}
+            refreshControl={
+              <RefreshControl
+                refreshing={isLoading}
+                onRefresh={runSearch}
+                tintColor={Colors.primary}
+              />
+            }
+            ItemSeparatorComponent={() => <View style={styles.separator} />}
+          />
+          <FilterBottomSheet
+            visible={filterSheetOpen}
+            selectedSport={selectedSport}
+            selectedSkillLevel={selectedSkillLevel}
+            radiusKm={radiusKm}
+            onSportChange={setSelectedSport}
+            onSkillChange={setSelectedSkillLevel}
+            onRadiusChange={setRadiusKm}
+            onApply={() => setFilterSheetOpen(false)}
+            onReset={resetFilters}
+            onClose={() => setFilterSheetOpen(false)}
+          />
+        </SafeAreaView>
+      </LinearGradient>
+    );
+  }
+
+  // Trending tab
+  const isLoading = isLoadingTrending;
+  return (
+    <LinearGradient colors={Colors.gradientDark} style={styles.container}>
+      <SafeAreaView style={styles.safeArea} edges={['top']}>
+        <FlatList
+          data={isLoading ? [] : trending}
+          keyExtractor={(item) => item.event.id}
+          renderItem={renderTrending}
+          ListHeaderComponent={ListHeader}
+          ListEmptyComponent={
+            isLoading
+              ? renderEventSkeleton()
+              : (
+                <EmptyState
+                  icon="🔥"
+                  title="Nothing trending yet"
+                  subtitle="Create a game and get players joining!"
+                />
+              )
+          }
+          contentContainerStyle={styles.listContent}
+          showsVerticalScrollIndicator={false}
+          refreshControl={
+            <RefreshControl
+              refreshing={isLoading}
+              onRefresh={runSearch}
+              tintColor={Colors.primary}
+            />
+          }
+          ItemSeparatorComponent={() => <View style={styles.separator} />}
+        />
       </SafeAreaView>
     </LinearGradient>
   );
@@ -143,129 +338,93 @@ export function DiscoverScreen({ navigation }: Props) {
 const styles = StyleSheet.create({
   container: { flex: 1 },
   safeArea: { flex: 1 },
-  header: {
+  listContent: {
     paddingHorizontal: Spacing.lg,
+    paddingBottom: 100,
+  },
+  pageHeader: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
     paddingTop: Spacing.md,
     paddingBottom: Spacing.base,
+    paddingHorizontal: 0, // listContent already has horizontal padding
   },
-  title: {
+  pageTitle: {
     fontSize: 26,
     fontWeight: '700',
     color: Colors.foreground,
   },
-  subtitle: {
-    fontSize: 13,
+  pageSubtitle: {
+    fontSize: 12,
     color: Colors.mutedForeground,
     marginTop: 2,
   },
-  searchContainer: {
+  locationChip: {
     flexDirection: 'row',
     alignItems: 'center',
-    marginHorizontal: Spacing.lg,
-    marginBottom: Spacing.base,
-    backgroundColor: 'rgba(24,24,30,0.5)',
-    borderRadius: BorderRadius.xl,
-    borderWidth: 1,
-    borderColor: Colors.border,
-    height: 48,
-    paddingHorizontal: 16,
-    gap: 10,
-  },
-  searchInput: {
-    flex: 1,
-    color: Colors.foreground,
-    fontSize: 15,
-    height: '100%',
-  },
-  filterRow: {
-    paddingHorizontal: Spacing.lg,
-    paddingBottom: 12,
-    gap: 8,
-  },
-  filterChip: {
-    paddingHorizontal: 14,
-    paddingVertical: 8,
+    gap: 4,
+    paddingHorizontal: 10,
+    paddingVertical: 5,
     borderRadius: BorderRadius.full,
+    backgroundColor: Colors.primaryDim,
+    borderWidth: 1,
+    borderColor: Colors.primaryBorder,
+  },
+  locationText: {
+    fontSize: 10,
+    fontWeight: '700',
+    color: Colors.primary,
+  },
+  tabs: {
+    flexDirection: 'row',
+    gap: 8,
+    marginBottom: 14,
+  },
+  tab: {
+    flex: 1,
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: 6,
+    paddingVertical: 10,
+    borderRadius: BorderRadius.xl,
     backgroundColor: Colors.secondary,
     borderWidth: 1,
     borderColor: Colors.border,
   },
-  filterChipActive: {
+  tabActive: {
     backgroundColor: Colors.primaryDim,
     borderColor: Colors.primaryBorder,
   },
-  filterChipText: {
+  tabIcon: { fontSize: 14 },
+  tabLabel: {
     fontSize: 13,
+    fontWeight: '600',
+    color: Colors.mutedForeground,
+  },
+  tabLabelActive: {
+    color: Colors.primary,
+  },
+  chipsWrapper: {
+    marginHorizontal: -Spacing.lg,
+    marginBottom: 12,
+  },
+  resultsRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    marginBottom: 10,
+  },
+  resultsCount: {
+    fontSize: 12,
     color: Colors.mutedForeground,
     fontWeight: '500',
   },
-  filterChipTextActive: {
-    color: Colors.primary,
-  },
-  results: {
-    paddingHorizontal: Spacing.lg,
-    paddingBottom: 100,
-    gap: 12,
-  },
-  resultsCount: {
-    fontSize: 13,
-    color: Colors.mutedForeground,
-    marginBottom: 4,
-  },
-  eventCard: { padding: 16 },
-  eventTop: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    alignItems: 'flex-start',
-    marginBottom: 12,
-  },
-  eventLeft: { flex: 1, marginRight: 12 },
-  eventSport: {
-    fontSize: 11,
+  clearFilters: {
+    fontSize: 12,
     color: Colors.primary,
     fontWeight: '600',
-    marginBottom: 2,
   },
-  eventTitle: {
-    fontSize: 15,
-    fontWeight: '600',
-    color: Colors.foreground,
-    marginBottom: 4,
-  },
-  locationRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 6,
-  },
-  locationText: {
-    fontSize: 12,
-    color: Colors.mutedForeground,
-  },
-  distanceText: {
-    fontSize: 12,
-    color: Colors.primary,
-  },
-  eventBottom: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 16,
-  },
-  eventMeta: {
-    fontSize: 12,
-    color: Colors.mutedForeground,
-  },
-  joinButton: {
-    marginLeft: 'auto',
-    paddingHorizontal: 16,
-    paddingVertical: 6,
-    borderRadius: BorderRadius.full,
-    backgroundColor: Colors.primaryDim,
-    borderWidth: 1,
-    borderColor: Colors.primaryBorder,
-  },
-  joinButtonText: {
-    fontSize: 12,
-    fontWeight: '600',
-    color: Colors.primary,
-  },
+  separator: { height: 10 },
 });

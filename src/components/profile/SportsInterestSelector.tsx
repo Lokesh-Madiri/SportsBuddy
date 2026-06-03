@@ -3,6 +3,7 @@ import { ScrollView, StyleSheet, Text, TextInput, TouchableOpacity, View } from 
 import { Ionicons } from '@expo/vector-icons';
 import { SPORTS } from '../../constants';
 import { BorderRadius, Colors, Spacing } from '../../theme';
+import { neonShadow } from '../../utils/platform';
 
 type Props = {
   selectedSports: string[];
@@ -110,9 +111,7 @@ const styles = StyleSheet.create({
     backgroundColor: Colors.primaryDim,
   },
   favoriteChip: {
-    shadowColor: Colors.primary,
-    shadowOpacity: 0.3,
-    shadowRadius: 8,
+    ...neonShadow(Colors.primary, 8, 0.3),
   },
   sportIcon: { fontSize: 14 },
   chipText: {

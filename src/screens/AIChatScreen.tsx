@@ -21,6 +21,7 @@ import type { AIChatMessage, AssistantContext } from '../services/aiService';
 import { useAuthStore } from '../store/authStore';
 import { BorderRadius, Colors, Spacing } from '../theme';
 import type { ChatStackParamList } from '../utils/types';
+import { neonShadow } from '../utils/platform';
 
 type Props = {
   navigation: NativeStackNavigationProp<ChatStackParamList, 'AIChat'>;
@@ -289,12 +290,9 @@ const styles = StyleSheet.create({
     backgroundColor: Colors.primary,
     alignItems: 'center',
     justifyContent: 'center',
-    shadowColor: Colors.primary,
-    shadowOpacity: 0.35,
-    shadowRadius: 10,
+    ...neonShadow(Colors.primary, 10, 0.35),
   },
   sendButtonDisabled: {
     opacity: 0.45,
-    shadowOpacity: 0,
   },
 });

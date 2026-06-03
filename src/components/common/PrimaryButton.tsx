@@ -8,6 +8,7 @@ import {
   TextStyle,
 } from 'react-native';
 import { Colors, BorderRadius } from '../../theme';
+import { neonShadow } from '../../utils/platform';
 
 interface PrimaryButtonProps {
   title: string;
@@ -75,11 +76,7 @@ const styles = StyleSheet.create({
   },
   primary: {
     backgroundColor: Colors.primary,
-    shadowColor: Colors.primary,
-    shadowOffset: { width: 0, height: 0 },
-    shadowOpacity: 0.4,
-    shadowRadius: 12,
-    elevation: 8,
+    ...neonShadow(Colors.primary, 12, 0.4),
   },
   outline: {
     backgroundColor: 'rgba(30,30,40,0.5)',

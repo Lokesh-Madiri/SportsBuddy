@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useEffect, useState } from 'react';
 import {
   View,
   Text,
@@ -13,6 +13,7 @@ import { LinearGradient } from 'expo-linear-gradient';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { NativeStackNavigationProp } from '@react-navigation/native-stack';
 import { HomeStackParamList } from '../utils/types';
+import { neonShadow } from '../utils/platform';
 import { useAuthStore } from '../store/authStore';
 import { createEvent } from '../firebase/firestore';
 import { aiService } from '../services/aiService';
@@ -343,10 +344,7 @@ const styles = StyleSheet.create({
   skillButtonActive: {
     backgroundColor: Colors.primary,
     borderColor: Colors.primary,
-    shadowColor: Colors.primary,
-    shadowOffset: { width: 0, height: 0 },
-    shadowOpacity: 0.4,
-    shadowRadius: 8,
+    ...neonShadow(Colors.primary, 8, 0.4),
   },
   skillButtonText: {
     fontSize: 12,

@@ -13,6 +13,7 @@ import { SafeAreaView } from 'react-native-safe-area-context';
 import { NativeStackNavigationProp } from '@react-navigation/native-stack';
 import { RouteProp } from '@react-navigation/native';
 import { HomeStackParamList } from '../utils/types';
+import { neonShadow } from '../utils/platform';
 import { useAuthStore } from '../store/authStore';
 import { getEventById, joinEvent, leaveEvent } from '../firebase/firestore';
 import { GlassCard, Avatar, Badge, PrimaryButton, LoadingScreen } from '../components/common';
@@ -357,10 +358,7 @@ const styles = StyleSheet.create({
     borderColor: Colors.primaryBorder,
     alignItems: 'center',
     justifyContent: 'center',
-    shadowColor: Colors.primary,
-    shadowOffset: { width: 0, height: 0 },
-    shadowOpacity: 0.4,
-    shadowRadius: 12,
+    ...neonShadow(Colors.primary, 12, 0.4),
   },
   sportIconLabel: {
     fontSize: 14,

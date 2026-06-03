@@ -13,6 +13,7 @@ import {
 import { LinearGradient } from 'expo-linear-gradient';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { NativeStackNavigationProp } from '@react-navigation/native-stack';
+import { neonShadow, nativeDriver } from '../utils/platform';
 import { RouteProp } from '@react-navigation/native';
 import { HomeStackParamList } from '../utils/types';
 import { useAuthStore } from '../store/authStore';
@@ -105,8 +106,8 @@ export function ChatScreen({ navigation, route }: Props) {
       Animated.loop(
         Animated.sequence([
           Animated.delay(delay),
-          Animated.timing(dot, { toValue: -6, duration: 300, useNativeDriver: true }),
-          Animated.timing(dot, { toValue: 0, duration: 300, useNativeDriver: true }),
+          Animated.timing(dot, { toValue: -6, duration: 300, useNativeDriver: nativeDriver }),
+          Animated.timing(dot, { toValue: 0, duration: 300, useNativeDriver: nativeDriver }),
         ])
       ).start();
 
@@ -549,14 +550,10 @@ const styles = StyleSheet.create({
     backgroundColor: Colors.primary,
     alignItems: 'center',
     justifyContent: 'center',
-    shadowColor: Colors.primary,
-    shadowOffset: { width: 0, height: 0 },
-    shadowOpacity: 0.4,
-    shadowRadius: 8,
+    ...neonShadow(Colors.primary, 8, 0.4),
   },
   sendButtonDisabled: {
     opacity: 0.5,
-    shadowOpacity: 0,
   },
   sendIcon: {
     color: Colors.primaryForeground,

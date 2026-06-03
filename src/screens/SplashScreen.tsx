@@ -9,6 +9,7 @@ import {
 } from 'react-native';
 import { LinearGradient } from 'expo-linear-gradient';
 import { Colors } from '../theme';
+import { neonShadow, neonTextShadow, nativeDriver } from '../utils/platform';
 
 const { width, height } = Dimensions.get('window');
 
@@ -25,14 +26,14 @@ export function SplashScreen() {
       Animated.timing(fadeAnim, {
         toValue: 1,
         duration: 800,
-        useNativeDriver: true,
+        useNativeDriver: nativeDriver,
         easing: Easing.out(Easing.cubic),
       }),
       Animated.spring(scaleAnim, {
         toValue: 1,
         tension: 60,
         friction: 8,
-        useNativeDriver: true,
+        useNativeDriver: nativeDriver,
       }),
     ]).start();
 
@@ -41,7 +42,7 @@ export function SplashScreen() {
       toValue: 1,
       duration: 600,
       delay: 300,
-      useNativeDriver: true,
+      useNativeDriver: nativeDriver,
     }).start();
 
     // Rotating ring
@@ -50,7 +51,7 @@ export function SplashScreen() {
         toValue: 1,
         duration: 8000,
         easing: Easing.linear,
-        useNativeDriver: true,
+        useNativeDriver: nativeDriver,
       })
     ).start();
 
@@ -141,11 +142,7 @@ const styles = StyleSheet.create({
     height: 256,
     borderRadius: 128,
     backgroundColor: 'rgba(190,255,0,0.12)',
-    // blur effect via shadow
-    shadowColor: '#beff00',
-    shadowOffset: { width: 0, height: 0 },
-    shadowOpacity: 0.5,
-    shadowRadius: 80,
+    ...neonShadow('#beff00', 80, 0.5),
   },
   glowBottom: {
     position: 'absolute',
@@ -188,11 +185,7 @@ const styles = StyleSheet.create({
     backgroundColor: 'rgba(190,255,0,0.15)',
     alignItems: 'center',
     justifyContent: 'center',
-    shadowColor: '#beff00',
-    shadowOffset: { width: 0, height: 0 },
-    shadowOpacity: 0.6,
-    shadowRadius: 16,
-    elevation: 8,
+    ...neonShadow('#beff00', 16, 0.6),
   },
   globeContainer: {
     width: 32,
@@ -235,9 +228,7 @@ const styles = StyleSheet.create({
   },
   titleAccent: {
     color: Colors.primary,
-    textShadowColor: 'rgba(190,255,0,0.5)',
-    textShadowOffset: { width: 0, height: 0 },
-    textShadowRadius: 12,
+    ...neonTextShadow('rgba(190,255,0,0.5)', 12),
   },
   subtitle: {
     fontSize: 14,

@@ -13,6 +13,7 @@ import { SafeAreaView } from 'react-native-safe-area-context';
 import { NativeStackNavigationProp } from '@react-navigation/native-stack';
 import { useNavigation } from '@react-navigation/native';
 import { HomeStackParamList } from '../utils/types';
+import { neonShadow } from '../utils/platform';
 import { useAuthStore } from '../store/authStore';
 import { useEventsStore } from '../store/eventsStore';
 import { subscribeToEvents } from '../firebase/firestore';
@@ -553,11 +554,7 @@ const styles = StyleSheet.create({
     backgroundColor: Colors.primary,
     alignItems: 'center',
     justifyContent: 'center',
-    shadowColor: Colors.primary,
-    shadowOffset: { width: 0, height: 0 },
-    shadowOpacity: 0.5,
-    shadowRadius: 16,
-    elevation: 10,
+    ...neonShadow(Colors.primary, 16, 0.5),
   },
   fabIcon: {
     fontSize: 28,

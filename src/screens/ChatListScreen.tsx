@@ -12,6 +12,7 @@ import { NativeStackNavigationProp } from '@react-navigation/native-stack';
 import { ChatStackParamList } from '../utils/types';
 import { GlassCard } from '../components/common';
 import { Colors, BorderRadius, Spacing } from '../theme';
+import { neonShadow } from '../utils/platform';
 
 type Props = {
   navigation: NativeStackNavigationProp<ChatStackParamList, 'ChatList'>;
@@ -173,9 +174,7 @@ const styles = StyleSheet.create({
     backgroundColor: Colors.primary,
     alignItems: 'center',
     justifyContent: 'center',
-    shadowColor: Colors.primary,
-    shadowOpacity: 0.35,
-    shadowRadius: 12,
+    ...neonShadow(Colors.primary, 12, 0.35),
   },
   aiIconText: {
     fontSize: 15,
