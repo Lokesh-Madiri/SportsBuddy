@@ -70,6 +70,16 @@ export const promptService = {
     ].join('\n');
   },
 
+  buildLocationSuggestionPrompt(city: string, sport: string): string {
+    return [
+      `Suggest all popular real-world venues, public parks, municipal grounds, private sports turfs, commercial indoor arenas, academy grounds, and community clubs for playing ${sport} in or near ${city}.`,
+      `To ensure hidden or active local venues are not missed, base your suggestions on local community recommendations, Reddit searches/threads (e.g., city subreddits or sports meetups), Facebook groups/posts, and local club listings.`,
+      `Include both free/public spaces and paid private turfs that are highly active in the community.`,
+      `For each venue, provide its approximate latitude and longitude coordinates and classify it as "public" (free park/ground) or "private" (paid commercial turf/arena).`,
+      `Format the output strictly as: Venue Name | Latitude | Longitude | Type, with one venue per line. Do not include bullet points, numbering, or introductory text. Example:\nIndira Gandhi Municipal Stadium | 16.5085 | 80.6472 | public\nVijetha Sports Academy | 16.5201 | 80.6212 | private`,
+    ].join('\n');
+  },
+
   async generateShortExplanation(prompt: string, fallback: string): Promise<string> {
     if (!AI_CONFIG.OPENAI_API_KEY) return fallback;
 

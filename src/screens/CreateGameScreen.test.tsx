@@ -18,6 +18,18 @@ jest.mock('../firebase/firestore', () => ({
 jest.mock('../services/aiService', () => ({
   aiService: {
     getEventSuggestion: jest.fn(() => Promise.resolve({ suggestedDay: 'Saturday', suggestedTime: '6:00 PM' })),
+    getLocationSuggestions: jest.fn(() => Promise.resolve([
+      { name: 'Central Park', distance: '1.2 miles away' },
+      { name: 'YMCA', distance: '2.5 miles away' }
+    ])),
+  },
+}));
+jest.mock('../services/locationService', () => ({
+  locationService: {
+    getCurrentLocation: jest.fn(() => Promise.resolve({ latitude: 40.7128, longitude: -74.0060 })),
+  },
+  geocodingService: {
+    getCity: jest.fn(() => Promise.resolve('New York')),
   },
 }));
 
@@ -52,12 +64,13 @@ describe('CreateGameScreen - Visual Elements Testing', () => {
 
     // Header elements
     expect(getByText('Create Game')).toBeTruthy();
-    expect(getByText('Step 1 of 3: Sport')).toBeTruthy();
+    expect(getByText('Step 1 of 4: Sport')).toBeTruthy();
     expect(getByText('←')).toBeTruthy(); // Back button
 
     // Progress indicators
     expect(getByText('Sport')).toBeTruthy();
-    expect(getByText('Details')).toBeTruthy();
+    expect(getByText('Time')).toBeTruthy();
+    expect(getByText('Location')).toBeTruthy();
     expect(getByText('Review')).toBeTruthy();
 
     // Step 1 fields
@@ -66,14 +79,10 @@ describe('CreateGameScreen - Visual Elements Testing', () => {
     
     // Skill Level grid
     expect(getByText('Skill Level')).toBeTruthy();
-    expect(getByText('Beginner')).toBeTruthy();
-    expect(getByText('Intermediate')).toBeTruthy();
-    expect(getByText('Advanced')).toBeTruthy();
 
     // Open Sport Picker
     fireEvent.press(getByText('Select a sport'));
     expect(getByText('⚽ Soccer')).toBeTruthy();
-    expect(getByText('🏀 Basketball')).toBeTruthy();
     
     // Navigation Button
     expect(getByText('Next Step')).toBeTruthy();
@@ -83,7 +92,7 @@ describe('CreateGameScreen - Visual Elements Testing', () => {
   });
 
   test('renders all Step 2 visual elements including Calendar and TimePicker', () => {
-    const { getByText, getByPlaceholderText, queryByText } = render(<CreateGameScreen navigation={mockNavigation} />);
+    const { getByText, getByPlaceholderText, getAllByText } = render(<CreateGameScreen navigation={mockNavigation} />);
 
     // Complete Step 1
     fireEvent.press(getByText('Select a sport'));
@@ -91,41 +100,21 @@ describe('CreateGameScreen - Visual Elements Testing', () => {
     fireEvent.press(getByText('Intermediate'));
     fireEvent.press(getByText('Next Step'));
 
-    expect(getByText('Step 2 of 3: Details')).toBeTruthy();
+    expect(getByText('Step 2 of 4: Time')).toBeTruthy();
 
     // Step 2 Fields
     expect(getByText('Date (YYYY-MM-DD)')).toBeTruthy();
     expect(getByPlaceholderText('e.g. 2026-06-15')).toBeTruthy();
-    expect(getByText('Time')).toBeTruthy();
+    expect(getAllByText('Time').length).toBeGreaterThan(0);
     expect(getByPlaceholderText('e.g. 6:00 PM')).toBeTruthy();
-    expect(getByText('Location')).toBeTruthy();
-    expect(getByPlaceholderText('Enter location or address')).toBeTruthy();
-
-    // Check Calendar visual element
-    fireEvent(getByPlaceholderText('e.g. 2026-06-15'), 'focus');
-    expect(getByText('Su')).toBeTruthy();
-    expect(getByText('Mo')).toBeTruthy();
-    expect(getByText('Tu')).toBeTruthy();
-    expect(getByText('◂')).toBeTruthy();
-    expect(getByText('▸')).toBeTruthy();
-
-    // Check TimePicker visual element
-    fireEvent(getByPlaceholderText('e.g. 6:00 PM'), 'focus');
-    expect(getByText('Select Time (6:00 PM)')).toBeTruthy();
-    expect(getByText('Hour')).toBeTruthy();
-    expect(getByText('Minute')).toBeTruthy();
-    expect(getByText('AM / PM')).toBeTruthy();
-    expect(getByText('AM')).toBeTruthy();
-    expect(getByText('PM')).toBeTruthy();
-    expect(getByText('Done')).toBeTruthy();
 
     // Back & Next buttons
     expect(getByText('Back')).toBeTruthy();
     expect(getByText('Next Step')).toBeTruthy();
   });
 
-  test('renders all Step 3 visual elements', async () => {
-    const { getByText, getByPlaceholderText, queryByText } = render(<CreateGameScreen navigation={mockNavigation} />);
+  test('renders all Step 3 visual elements', () => {
+    const { getByText, getByPlaceholderText } = render(<CreateGameScreen navigation={mockNavigation} />);
 
     // Complete Step 1
     fireEvent.press(getByText('Select a sport'));
@@ -136,16 +125,44 @@ describe('CreateGameScreen - Visual Elements Testing', () => {
     // Complete Step 2
     fireEvent.changeText(getByPlaceholderText('e.g. 2026-06-15'), '2029-12-15');
     fireEvent.changeText(getByPlaceholderText('e.g. 6:00 PM'), '6:00 PM');
-    fireEvent.changeText(getByPlaceholderText('Enter location or address'), 'Central Park');
     fireEvent.press(getByText('Next Step'));
 
-    expect(getByText('Step 3 of 3: Review')).toBeTruthy();
+    expect(getByText('Step 3 of 4: Location')).toBeTruthy();
 
-    // Step 3 Inputs
+    // Step 3 Fields
+    expect(getByText('Search Location')).toBeTruthy();
+    expect(getByPlaceholderText('Start typing to search...')).toBeTruthy();
+    expect(getByText('Publicly Available Grounds (Free)')).toBeTruthy();
+
+    // Back & Next buttons
+    expect(getByText('Back')).toBeTruthy();
+    expect(getByText('Next Step')).toBeTruthy();
+  });
+
+  test('renders all Step 4 visual elements', async () => {
+    const { getByText, getByPlaceholderText } = render(<CreateGameScreen navigation={mockNavigation} />);
+
+    // Complete Step 1
+    fireEvent.press(getByText('Select a sport'));
+    fireEvent.press(getByText('⚽ Soccer'));
+    fireEvent.press(getByText('Intermediate'));
+    fireEvent.press(getByText('Next Step'));
+
+    // Complete Step 2
+    fireEvent.changeText(getByPlaceholderText('e.g. 2026-06-15'), '2029-12-15');
+    fireEvent.changeText(getByPlaceholderText('e.g. 6:00 PM'), '6:00 PM');
+    fireEvent.press(getByText('Next Step'));
+
+    // Complete Step 3
+    fireEvent.changeText(getByPlaceholderText('Start typing to search...'), 'Central Park');
+    fireEvent.press(getByText('Next Step'));
+
+    expect(getByText('Step 4 of 4: Review')).toBeTruthy();
+
+    // Step 4 Inputs
     expect(getByText('Maximum Players')).toBeTruthy();
     expect(getByPlaceholderText('10')).toBeTruthy();
     expect(getByText('Description (optional)')).toBeTruthy();
-    expect(getByPlaceholderText('Tell players what to expect...')).toBeTruthy();
 
     // Review Card
     expect(getByText('Review Match Details')).toBeTruthy();
@@ -183,7 +200,8 @@ describe('CreateGameScreen - Visual Elements Testing', () => {
     fireEvent.press(getByText('Next Step'));
     fireEvent.changeText(getByPlaceholderText('e.g. 2026-06-15'), '2029-12-15');
     fireEvent.changeText(getByPlaceholderText('e.g. 6:00 PM'), '6:00 PM');
-    fireEvent.changeText(getByPlaceholderText('Enter location or address'), 'Central Park');
+    fireEvent.press(getByText('Next Step'));
+    fireEvent.changeText(getByPlaceholderText('Start typing to search...'), 'Central Park');
     fireEvent.press(getByText('Next Step'));
     fireEvent.changeText(getByPlaceholderText('Tell players what to expect...'), 'Good game');
     

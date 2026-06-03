@@ -112,7 +112,7 @@ export interface AIChatMessage {
   status?: 'sending' | 'sent' | 'failed';
   metadata?: {
     intent?: string;
-    provider?: 'openai' | 'openrouter' | 'local';
+    provider?: 'openai' | 'openrouter' | 'groq' | 'local';
     model?: string;
     recommendationCount?: number;
   };

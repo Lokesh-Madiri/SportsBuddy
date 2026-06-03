@@ -26,6 +26,15 @@ export const isGoogleAuthConfigured =
   !!androidClientId || !!iosClientId || !!webClientId;
 
 export function useGoogleAuthRequest() {
+  if (!isGoogleAuthConfigured) {
+    return [
+      null,
+      null,
+      () => Promise.resolve({ type: 'dismiss' as const }),
+    ] as const;
+  }
+
+  // eslint-disable-next-line react-hooks/rules-of-hooks
   return Google.useIdTokenAuthRequest({
     androidClientId,
     iosClientId,
