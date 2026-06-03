@@ -1,4 +1,4 @@
-import React, { useEffect, useState, useCallback } from 'react';
+import React, { useEffect, useState } from 'react';
 import {
   View,
   Text,
@@ -12,10 +12,18 @@ import { LinearGradient } from 'expo-linear-gradient';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { NativeStackNavigationProp } from '@react-navigation/native-stack';
 import { RouteProp } from '@react-navigation/native';
+import { Ionicons } from '@expo/vector-icons';
 import { HomeStackParamList } from '../utils/types';
 import { neonShadow } from '../utils/platform';
 import { useAuthStore } from '../store/authStore';
-import { getEventById, joinEvent, leaveEvent } from '../firebase/firestore';
+import {
+  subscribeToEvent,
+  joinEvent,
+  leaveEvent,
+  deleteEvent,
+  completeEvent,
+  ensureChat,
+} from '../firebase/firestore';
 import { GlassCard, Avatar, Badge, PrimaryButton, LoadingScreen } from '../components/common';
 import { Colors, BorderRadius, Spacing } from '../theme';
 import { formatDate } from '../utils/helpers';
@@ -64,29 +72,28 @@ export function MatchDetailsScreen({ navigation, route }: Props) {
   const [loading, setLoading] = useState(true);
   const [joining, setJoining] = useState(false);
 
+  const isOrganizer = event?.organizerId === user?.uid;
   const isParticipant = event?.participants.some((p) => p.uid === user?.uid);
   const isFull = (event?.currentPlayers || 0) >= (event?.maxPlayers || 0);
 
-  const loadEvent = useCallback(async () => {
-    setLoading(true);
-    try {
-      if (eventId.startsWith('mock_')) {
-        setEvent(MOCK_EVENT);
-      } else {
-        const data = await getEventById(eventId);
-        setEvent(data || MOCK_EVENT);
-      }
-    } catch {
-      setEvent(MOCK_EVENT);
-    } finally {
-      setLoading(false);
-    }
-  }, [eventId]);
-
+  // ─── Live subscription ─────────────────────────────────────────────────────
   useEffect(() => {
-    // eslint-disable-next-line react-hooks/set-state-in-effect
-    loadEvent();
-  }, [loadEvent]);
+    if (eventId.startsWith('mock_')) {
+      // Mock path — schedule state updates asynchronously to satisfy the linter rule
+      const t = setTimeout(() => {
+        setEvent(MOCK_EVENT);
+        setLoading(false);
+      }, 0);
+      return () => clearTimeout(t);
+    }
+
+    const unsubscribe = subscribeToEvent(eventId, (liveEvent) => {
+      setEvent(liveEvent ?? MOCK_EVENT);
+      setLoading(false);
+    });
+
+    return unsubscribe;
+  }, [eventId]);
 
   async function handleJoin() {
     if (!user || !event) return;
@@ -135,6 +142,67 @@ export function MatchDetailsScreen({ navigation, route }: Props) {
     });
   }
 
+  function handleEdit() {
+    if (!event) return;
+    navigation.navigate('EditGame', { eventId: event.id });
+  }
+
+  function handleDelete() {
+    Alert.alert(
+      'Delete Event',
+      'This will permanently delete the event and its chat. Participants will be notified.',
+      [
+        { text: 'Cancel', style: 'cancel' },
+        {
+          text: 'Delete',
+          style: 'destructive',
+          onPress: async () => {
+            try {
+              await deleteEvent(eventId);
+              navigation.popToTop();
+            } catch {
+              Alert.alert('Error', 'Failed to delete event. Try again.');
+            }
+          },
+        },
+      ]
+    );
+  }
+
+  function handleComplete() {
+    Alert.alert(
+      'Mark as Completed',
+      'This will end the event and trigger the post-match rating flow for all participants.',
+      [
+        { text: 'Cancel', style: 'cancel' },
+        {
+          text: 'Complete',
+          onPress: async () => {
+            try {
+              await completeEvent(eventId);
+              navigation.navigate('PostMatchRating', { eventId });
+            } catch {
+              Alert.alert('Error', 'Failed to complete event. Try again.');
+            }
+          },
+        },
+      ]
+    );
+  }
+
+  async function handleOpenChat() {
+    if (!event || !user) return;
+    const chatId = event.chatId || event.id;
+    // Ensure chat document exists in Firestore
+    await ensureChat(
+      chatId,
+      event.id,
+      event.title,
+      event.participants.map((p) => p.uid)
+    );
+    navigation.navigate('ChatScreen', { chatId, eventTitle: event.title });
+  }
+
   if (loading) return <LoadingScreen message="Loading event..." />;
   if (!event) return null;
 
@@ -158,9 +226,21 @@ export function MatchDetailsScreen({ navigation, route }: Props) {
           <TouchableOpacity onPress={() => navigation.goBack()} style={styles.navButton}>
             <Text style={styles.navButtonText}>←</Text>
           </TouchableOpacity>
-          <TouchableOpacity onPress={handleShare} style={styles.navButton}>
-            <Text style={styles.navButtonText}>↑</Text>
-          </TouchableOpacity>
+          <View style={styles.bannerActions}>
+            {isOrganizer && (
+              <>
+                <TouchableOpacity onPress={handleEdit} style={styles.navButton}>
+                  <Ionicons name="pencil-outline" size={18} color={Colors.foreground} />
+                </TouchableOpacity>
+                <TouchableOpacity onPress={handleDelete} style={[styles.navButton, styles.deleteButton]}>
+                  <Ionicons name="trash-outline" size={18} color={Colors.error} />
+                </TouchableOpacity>
+              </>
+            )}
+            <TouchableOpacity onPress={handleShare} style={styles.navButton}>
+              <Text style={styles.navButtonText}>↑</Text>
+            </TouchableOpacity>
+          </View>
         </SafeAreaView>
 
         {/* Sport icon */}
@@ -263,21 +343,14 @@ export function MatchDetailsScreen({ navigation, route }: Props) {
         </View>
 
         {/* Chat preview */}
-        <TouchableOpacity
-          onPress={() =>
-            navigation.navigate('ChatScreen', {
-              chatId: event.chatId || event.id,
-              eventTitle: event.title,
-            })
-          }
-        >
+        <TouchableOpacity onPress={handleOpenChat}>
           <GlassCard style={styles.chatPreview}>
             <View style={styles.chatInfo}>
               <Text style={styles.chatTitle}>Game Chat</Text>
               <Text style={styles.chatSubtitle}>Tap to join the conversation</Text>
             </View>
             <View style={styles.chatBadge}>
-              <Text style={styles.chatBadgeText}>5</Text>
+              <Text style={styles.chatBadgeText}>💬</Text>
             </View>
           </GlassCard>
         </TouchableOpacity>
@@ -285,9 +358,17 @@ export function MatchDetailsScreen({ navigation, route }: Props) {
         <View style={styles.bottomPadding} />
       </ScrollView>
 
-      {/* Join button */}
+      {/* Footer actions */}
       <View style={styles.footer}>
-        {isParticipant && (
+        {/* Organizer-only controls */}
+        {isOrganizer && event.status === 'upcoming' && (
+          <View style={styles.organizerRow}>
+            <TouchableOpacity onPress={handleComplete} style={styles.completeButton}>
+              <Text style={styles.completeButtonText}>✓ Mark Complete</Text>
+            </TouchableOpacity>
+          </View>
+        )}
+        {isParticipant && event.status === 'completed' && (
           <PrimaryButton
             title="Rate Players"
             onPress={() => navigation.navigate('PostMatchRating', { eventId: event.id })}
@@ -574,9 +655,7 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
   },
   chatBadgeText: {
-    fontSize: 11,
-    fontWeight: '700',
-    color: Colors.primaryForeground,
+    fontSize: 14,
   },
   bottomPadding: { height: 20 },
   footer: {
@@ -590,5 +669,33 @@ const styles = StyleSheet.create({
   },
   rateButton: {
     height: 48,
+  },
+  // Banner action buttons (edit / delete / share row)
+  bannerActions: {
+    flexDirection: 'row',
+    gap: 8,
+  },
+  deleteButton: {
+    borderColor: Colors.error + '60',
+  },
+  // Organizer complete row
+  organizerRow: {
+    flexDirection: 'row',
+    gap: 8,
+  },
+  completeButton: {
+    flex: 1,
+    height: 44,
+    borderRadius: BorderRadius['2xl'],
+    backgroundColor: Colors.success + '20',
+    borderWidth: 1,
+    borderColor: Colors.success + '60',
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  completeButtonText: {
+    fontSize: 13,
+    fontWeight: '700',
+    color: Colors.success,
   },
 });

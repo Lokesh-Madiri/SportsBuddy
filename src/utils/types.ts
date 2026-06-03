@@ -249,6 +249,29 @@ export interface AIEventSuggestion {
   reason: string;
 }
 
+// ─── Leaderboard Types ────────────────────────────────────────────────────────
+export interface LeaderboardEntry {
+  uid: string;
+  displayName: string;
+  photoURL?: string;
+  sport?: string;
+  gamesPlayed: number;
+  rating: number;
+  sportsmanshipScore: number;
+  reliabilityScore: number;
+  communityScore: number;
+  trustedBadge: boolean;
+  trustLevel: ReputationLevel;
+  rank: number;
+}
+
+// ─── Typing Indicator ─────────────────────────────────────────────────────────
+export interface TypingUser {
+  uid: string;
+  displayName: string;
+  updatedAt: number; // epoch ms — for auto-cleanup
+}
+
 // ─── Navigation Types ─────────────────────────────────────────────────────────
 export type RootStackParamList = {
   Splash: undefined;
@@ -274,9 +297,11 @@ export type HomeStackParamList = {
   MatchDetails: { eventId: string };
   PostMatchRating: { eventId: string };
   CreateGame: undefined;
+  EditGame: { eventId: string };
   ChatScreen: { chatId: string; eventTitle: string };
   AllEvents: undefined;
   AllPlayers: undefined;
+  Leaderboard: { sport?: string };
 };
 
 export type DiscoverStackParamList = {
@@ -294,4 +319,5 @@ export type ProfileStackParamList = {
   ProfileScreen: undefined;
   EditProfile: undefined;
   Settings: undefined;
+  Leaderboard: { sport?: string };
 };

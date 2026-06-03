@@ -3,6 +3,7 @@ import {
   doc,
   addDoc,
   updateDoc,
+  deleteDoc,
   getDoc,
   getDocs,
   query,
@@ -14,12 +15,13 @@ import {
   arrayRemove,
   increment,
   orderBy,
+  setDoc,
   Timestamp,
   QueryConstraint,
 } from 'firebase/firestore';
 import { db } from './config';
 import { FIRESTORE_COLLECTIONS } from '../constants';
-import type { SportEvent, Message, User } from '../utils/types';
+import type { SportEvent, Message, User, Chat, LeaderboardEntry } from '../utils/types';
 
 // ─── Events ───────────────────────────────────────────────────────────────────
 export async function createEvent(eventData: Omit<SportEvent, 'id' | 'createdAt' | 'updatedAt'>): Promise<string> {
@@ -186,4 +188,193 @@ export async function getUsers(limitCount = 10): Promise<User[]> {
   );
   const snapshot = await getDocs(q);
   return snapshot.docs.map((d) => ({ uid: d.id, ...d.data() })) as User[];
+}
+
+// ─── Event Management (edit / delete / complete) ──────────────────────────────
+export async function updateEvent(
+  eventId: string,
+  data: Partial<Pick<SportEvent, 'title' | 'sport' | 'location' | 'date' | 'time' | 'endTime' | 'skillLevel' | 'maxPlayers' | 'description' | 'status'>>
+): Promise<void> {
+  const eventRef = doc(db, FIRESTORE_COLLECTIONS.EVENTS, eventId);
+  await updateDoc(eventRef, { ...data, updatedAt: serverTimestamp() });
+}
+
+export async function deleteEvent(eventId: string): Promise<void> {
+  // Delete the event document
+  await deleteDoc(doc(db, FIRESTORE_COLLECTIONS.EVENTS, eventId));
+  // Best-effort: delete associated chat document
+  try {
+    await deleteDoc(doc(db, FIRESTORE_COLLECTIONS.CHATS, eventId));
+  } catch {
+    // Chat may not exist — non-critical
+  }
+}
+
+export async function completeEvent(eventId: string): Promise<void> {
+  await updateDoc(doc(db, FIRESTORE_COLLECTIONS.EVENTS, eventId), {
+    status: 'completed',
+    updatedAt: serverTimestamp(),
+  });
+}
+
+export function subscribeToEvent(
+  eventId: string,
+  callback: (event: SportEvent | null) => void
+): () => void {
+  return onSnapshot(doc(db, FIRESTORE_COLLECTIONS.EVENTS, eventId), (snap) => {
+    if (!snap.exists()) { callback(null); return; }
+    const data = snap.data();
+    callback({
+      id: snap.id,
+      ...data,
+      date: (data.date as Timestamp)?.toDate() || new Date(),
+      createdAt: (data.createdAt as Timestamp)?.toDate() || new Date(),
+      updatedAt: (data.updatedAt as Timestamp)?.toDate() || new Date(),
+    } as SportEvent);
+  });
+}
+
+// ─── Chat Subscriptions ────────────────────────────────────────────────────────
+export async function ensureChat(chatId: string, eventId: string, eventTitle: string, participantIds: string[]): Promise<void> {
+  const chatRef = doc(db, FIRESTORE_COLLECTIONS.CHATS, chatId);
+  const snap = await getDoc(chatRef);
+  if (!snap.exists()) {
+    await setDoc(chatRef, {
+      id: chatId,
+      eventId,
+      eventTitle,
+      participants: participantIds,
+      unreadCount: 0,
+      createdAt: serverTimestamp(),
+      updatedAt: serverTimestamp(),
+    });
+  }
+}
+
+export function subscribeToUserChats(
+  userId: string,
+  callback: (chats: Chat[]) => void
+): () => void {
+  // array-contains + orderBy requires a composite index — query without orderBy,
+  // sort client-side to avoid the index requirement.
+  const q = query(
+    collection(db, FIRESTORE_COLLECTIONS.CHATS),
+    where('participants', 'array-contains', userId),
+    limit(30)
+  );
+
+  return onSnapshot(q, (snapshot) => {
+    const chats = snapshot.docs
+      .map((d) => {
+        const data = d.data();
+        return {
+          id: d.id,
+          ...data,
+          createdAt: (data.createdAt as Timestamp)?.toDate() || new Date(),
+          updatedAt: (data.updatedAt as Timestamp)?.toDate() || new Date(),
+        } as Chat;
+      })
+      // Sort client-side: most recently updated first
+      .sort((a, b) => b.updatedAt.getTime() - a.updatedAt.getTime());
+    callback(chats);
+  });
+}
+
+// ─── Typing Indicators ─────────────────────────────────────────────────────────
+const TYPING_TIMEOUT_MS = 4000;
+const typingTimers: Record<string, ReturnType<typeof setTimeout>> = {};
+
+export async function setTypingIndicator(
+  chatId: string,
+  userId: string,
+  displayName: string,
+  isTyping: boolean
+): Promise<void> {
+  const ref = doc(db, FIRESTORE_COLLECTIONS.CHATS, chatId, FIRESTORE_COLLECTIONS.TYPING, userId);
+
+  if (isTyping) {
+    await setDoc(ref, { uid: userId, displayName, updatedAt: Date.now() });
+    // Auto-clear after timeout
+    if (typingTimers[`${chatId}:${userId}`]) clearTimeout(typingTimers[`${chatId}:${userId}`]);
+    typingTimers[`${chatId}:${userId}`] = setTimeout(() => {
+      deleteDoc(ref).catch(() => null);
+    }, TYPING_TIMEOUT_MS);
+  } else {
+    if (typingTimers[`${chatId}:${userId}`]) clearTimeout(typingTimers[`${chatId}:${userId}`]);
+    await deleteDoc(ref).catch(() => null);
+  }
+}
+
+export function subscribeToTyping(
+  chatId: string,
+  currentUserId: string,
+  callback: (typingNames: string[]) => void
+): () => void {
+  return onSnapshot(
+    collection(db, FIRESTORE_COLLECTIONS.CHATS, chatId, FIRESTORE_COLLECTIONS.TYPING),
+    (snapshot) => {
+      const now = Date.now();
+      const names = snapshot.docs
+        .filter((d) => d.id !== currentUserId)
+        .filter((d) => now - (d.data().updatedAt || 0) < TYPING_TIMEOUT_MS)
+        .map((d) => d.data().displayName as string);
+      callback(names);
+    }
+  );
+}
+
+// ─── Online Status ─────────────────────────────────────────────────────────────
+export async function setUserOnlineStatus(uid: string, isOnline: boolean): Promise<void> {
+  try {
+    await updateDoc(doc(db, FIRESTORE_COLLECTIONS.USERS, uid), {
+      isOnline,
+      lastSeen: serverTimestamp(),
+    });
+  } catch {
+    // Non-critical — user doc may not exist yet
+  }
+}
+
+// ─── Leaderboard ──────────────────────────────────────────────────────────────
+export async function getLeaderboard(
+  sport?: string,
+  limitCount = 50
+): Promise<LeaderboardEntry[]> {
+  // Fetch top-rated users; filter by sport client-side if needed
+  const q = query(
+    collection(db, FIRESTORE_COLLECTIONS.USERS),
+    orderBy('rating', 'desc'),
+    limit(limitCount)
+  );
+  const snapshot = await getDocs(q);
+
+  let users = snapshot.docs.map((d) => {
+    const data = d.data();
+    return {
+      uid: d.id,
+      displayName: data.displayName || 'Player',
+      photoURL: data.photoURL,
+      sport: data.favoriteSport || (data.sports?.[0] ?? ''),
+      gamesPlayed: data.stats?.gamesPlayed || 0,
+      rating: data.rating || 0,
+      sportsmanshipScore: data.reputation?.sportsmanshipScore || data.sportsmanshipScore || 0,
+      reliabilityScore: data.reputation?.reliabilityScore || data.reliabilityScore || 0,
+      communityScore: data.reputation?.communityScore || 0,
+      trustedBadge: data.reputation?.trustedBadge ?? false,
+      trustLevel: data.reputation?.trustLevel || 'new',
+      rank: 0,
+    } as LeaderboardEntry;
+  });
+
+  if (sport) {
+    users = users.filter(
+      (u) =>
+        u.sport?.toLowerCase() === sport.toLowerCase() ||
+        (Array.isArray((u as any).sports) &&
+          (u as any).sports.some((s: string) => s.toLowerCase() === sport.toLowerCase()))
+    );
+  }
+
+  // Assign ranks
+  return users.map((u, i) => ({ ...u, rank: i + 1 }));
 }

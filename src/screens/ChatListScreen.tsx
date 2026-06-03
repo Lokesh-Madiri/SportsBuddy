@@ -1,4 +1,4 @@
-import React from 'react';
+import React, { useEffect } from 'react';
 import {
   View,
   Text,
@@ -13,93 +13,96 @@ import { ChatStackParamList } from '../utils/types';
 import { GlassCard } from '../components/common';
 import { Colors, BorderRadius, Spacing } from '../theme';
 import { neonShadow } from '../utils/platform';
+import { subscribeToUserChats } from '../firebase/firestore';
+import { useChatStore } from '../store/chatStore';
+import { useAuthStore } from '../store/authStore';
+import { timeAgo } from '../utils/helpers';
+import type { Chat } from '../utils/types';
+import { SPORTS } from '../constants';
 
 type Props = {
   navigation: NativeStackNavigationProp<ChatStackParamList, 'ChatList'>;
 };
 
-const MOCK_CHATS = [
-  {
-    id: 'chat_1',
-    eventTitle: '5v5 Pickup Game',
-    lastMessage: 'On my way now',
-    time: '5:45 PM',
-    unread: 3,
-    participants: ['Marcus T.', 'Alex C.', 'Sarah K.'],
-    sport: 'BB',
-  },
-  {
-    id: 'chat_2',
-    eventTitle: 'Weekend Soccer',
-    lastMessage: 'See you at the field!',
-    time: '2:30 PM',
-    unread: 0,
-    participants: ['James W.', 'Emily R.'],
-    sport: 'SC',
-  },
-  {
-    id: 'chat_3',
-    eventTitle: 'Tennis Doubles',
-    lastMessage: 'Great match everyone',
-    time: 'Yesterday',
-    unread: 1,
-    participants: ['David L.', 'Anna M.'],
-    sport: 'TN',
-  },
-];
+function sportEmoji(eventTitle: string): string {
+  const title = eventTitle.toLowerCase();
+  const match = SPORTS.find((s) => title.includes(s.name.toLowerCase()));
+  return match?.icon ?? '💬';
+}
 
 export function ChatListScreen({ navigation }: Props) {
+  const { user } = useAuthStore();
+  const { chats, setChats, getTotalUnread } = useChatStore();
+
+  useEffect(() => {
+    if (!user?.uid) return;
+    const unsubscribe = subscribeToUserChats(user.uid, (liveChats) => {
+      setChats(liveChats);
+    });
+    return unsubscribe;
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [user?.uid]);
+
+  function renderChat({ item }: { item: Chat }) {
+    const lastText = item.lastMessage?.text ?? 'No messages yet';
+    const lastTime = item.lastMessage?.createdAt
+      ? timeAgo(new Date(item.lastMessage.createdAt))
+      : '';
+
+    return (
+      <TouchableOpacity
+        onPress={() =>
+          navigation.navigate('ChatScreen', {
+            chatId: item.id,
+            eventTitle: item.eventTitle,
+          })
+        }
+        activeOpacity={0.85}
+      >
+        <GlassCard style={styles.chatItem}>
+          <View style={styles.chatAvatar}>
+            <Text style={styles.chatSportIcon}>{sportEmoji(item.eventTitle)}</Text>
+          </View>
+          <View style={styles.chatContent}>
+            <View style={styles.chatTop}>
+              <Text style={styles.chatTitle} numberOfLines={1}>{item.eventTitle}</Text>
+              <Text style={styles.chatTime}>{lastTime}</Text>
+            </View>
+            <View style={styles.chatBottom}>
+              <Text style={styles.chatLastMessage} numberOfLines={1}>{lastText}</Text>
+              {item.unreadCount > 0 && (
+                <View style={styles.unreadBadge}>
+                  <Text style={styles.unreadText}>{item.unreadCount > 9 ? '9+' : item.unreadCount}</Text>
+                </View>
+              )}
+            </View>
+            <Text style={styles.chatParticipants}>
+              {item.participants.length} participant{item.participants.length !== 1 ? 's' : ''}
+            </Text>
+          </View>
+        </GlassCard>
+      </TouchableOpacity>
+    );
+  }
+
   return (
     <LinearGradient colors={['#0a0a0a', '#0f0f14', '#0a0a0a']} style={styles.container}>
       <SafeAreaView style={styles.safeArea} edges={['top']}>
         <View style={styles.header}>
           <Text style={styles.title}>Messages</Text>
-          <TouchableOpacity style={styles.newChatButton}>
-            <Text style={styles.newChatIcon}>+</Text>
-          </TouchableOpacity>
+          {getTotalUnread() > 0 && (
+            <View style={styles.totalUnread}>
+              <Text style={styles.totalUnreadText}>{getTotalUnread()}</Text>
+            </View>
+          )}
         </View>
 
         <FlatList
-          data={MOCK_CHATS}
+          data={chats}
           keyExtractor={(item) => item.id}
           contentContainerStyle={styles.list}
           showsVerticalScrollIndicator={false}
-          renderItem={({ item }) => (
-            <TouchableOpacity
-              onPress={() =>
-                navigation.navigate('ChatScreen', {
-                  chatId: item.id,
-                  eventTitle: item.eventTitle,
-                })
-              }
-              activeOpacity={0.85}
-            >
-              <GlassCard style={styles.chatItem}>
-                <View style={styles.chatAvatar}>
-                  <Text style={styles.chatSportIcon}>{item.sport}</Text>
-                </View>
-                <View style={styles.chatContent}>
-                  <View style={styles.chatTop}>
-                    <Text style={styles.chatTitle} numberOfLines={1}>{item.eventTitle}</Text>
-                    <Text style={styles.chatTime}>{item.time}</Text>
-                  </View>
-                  <View style={styles.chatBottom}>
-                    <Text style={styles.chatLastMessage} numberOfLines={1}>
-                      {item.lastMessage}
-                    </Text>
-                    {item.unread > 0 && (
-                      <View style={styles.unreadBadge}>
-                        <Text style={styles.unreadText}>{item.unread}</Text>
-                      </View>
-                    )}
-                  </View>
-                  <Text style={styles.chatParticipants}>
-                    {item.participants.join(', ')}
-                  </Text>
-                </View>
-              </GlassCard>
-            </TouchableOpacity>
-          )}
+          renderItem={renderChat}
           ListHeaderComponent={
             <TouchableOpacity onPress={() => navigation.navigate('AIChat')} activeOpacity={0.86}>
               <GlassCard style={styles.aiCard} neonBorder>
@@ -120,6 +123,7 @@ export function ChatListScreen({ navigation }: Props) {
           }
           ListEmptyComponent={
             <View style={styles.empty}>
+              <Text style={styles.emptyIcon}>💬</Text>
               <Text style={styles.emptyTitle}>No chats yet</Text>
               <Text style={styles.emptySubtitle}>Join a game to start chatting with teammates</Text>
             </View>
@@ -141,25 +145,17 @@ const styles = StyleSheet.create({
     paddingTop: Spacing.md,
     paddingBottom: Spacing.base,
   },
-  title: {
-    fontSize: 26,
-    fontWeight: '700',
-    color: Colors.foreground,
+  title: { fontSize: 26, fontWeight: '700', color: Colors.foreground },
+  totalUnread: {
+    paddingHorizontal: 10,
+    paddingVertical: 4,
+    borderRadius: BorderRadius.full,
+    backgroundColor: Colors.primaryDim,
+    borderWidth: 1,
+    borderColor: Colors.primaryBorder,
   },
-  newChatButton: {
-    width: 40,
-    height: 40,
-    borderRadius: 20,
-    backgroundColor: Colors.secondary,
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
-  newChatIcon: { fontSize: 18 },
-  list: {
-    paddingHorizontal: Spacing.lg,
-    paddingBottom: 100,
-    gap: 10,
-  },
+  totalUnreadText: { fontSize: 12, fontWeight: '700', color: Colors.primary },
+  list: { paddingHorizontal: Spacing.lg, paddingBottom: 100, gap: 10 },
   aiCard: {
     flexDirection: 'row',
     alignItems: 'center',
@@ -176,34 +172,17 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
     ...neonShadow(Colors.primary, 12, 0.35),
   },
-  aiIconText: {
-    fontSize: 15,
-    fontWeight: '900',
-    color: Colors.primaryForeground,
-  },
+  aiIconText: { fontSize: 15, fontWeight: '900', color: Colors.primaryForeground },
   aiContent: { flex: 1 },
-  aiTitle: {
-    fontSize: 15,
-    fontWeight: '900',
-    color: Colors.foreground,
-  },
-  aiSubtitle: {
-    marginTop: 3,
-    fontSize: 12,
-    lineHeight: 17,
-    color: Colors.mutedForeground,
-  },
+  aiTitle: { fontSize: 15, fontWeight: '900', color: Colors.foreground },
+  aiSubtitle: { marginTop: 3, fontSize: 12, lineHeight: 17, color: Colors.mutedForeground },
   aiBadge: {
     paddingHorizontal: 9,
     paddingVertical: 5,
     borderRadius: BorderRadius.full,
     backgroundColor: Colors.primaryDim,
   },
-  aiBadgeText: {
-    fontSize: 10,
-    fontWeight: '900',
-    color: Colors.primary,
-  },
+  aiBadgeText: { fontSize: 10, fontWeight: '900', color: Colors.primary },
   chatItem: {
     flexDirection: 'row',
     padding: 16,
@@ -220,11 +199,7 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     justifyContent: 'center',
   },
-  chatSportIcon: {
-    fontSize: 14,
-    fontWeight: '700',
-    color: Colors.primary,
-  },
+  chatSportIcon: { fontSize: 22 },
   chatContent: { flex: 1 },
   chatTop: {
     flexDirection: 'row',
@@ -232,56 +207,29 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     marginBottom: 4,
   },
-  chatTitle: {
-    fontSize: 15,
-    fontWeight: '600',
-    color: Colors.foreground,
-    flex: 1,
-    marginRight: 8,
-  },
-  chatTime: {
-    fontSize: 11,
-    color: Colors.mutedForeground,
-  },
+  chatTitle: { fontSize: 15, fontWeight: '600', color: Colors.foreground, flex: 1, marginRight: 8 },
+  chatTime: { fontSize: 11, color: Colors.mutedForeground },
   chatBottom: {
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'space-between',
-    marginBottom: 4,
+    marginBottom: 3,
   },
-  chatLastMessage: {
-    fontSize: 13,
-    color: Colors.mutedForeground,
-    flex: 1,
-    marginRight: 8,
-  },
+  chatLastMessage: { fontSize: 13, color: Colors.mutedForeground, flex: 1, marginRight: 8 },
   unreadBadge: {
-    width: 20,
+    minWidth: 20,
     height: 20,
     borderRadius: 10,
     backgroundColor: Colors.primary,
     alignItems: 'center',
     justifyContent: 'center',
+    paddingHorizontal: 4,
   },
-  unreadText: {
-    fontSize: 10,
-    fontWeight: '700',
-    color: Colors.primaryForeground,
-  },
-  chatParticipants: {
-    fontSize: 11,
-    color: Colors.mutedForeground + '80',
-  },
-  empty: {
-    alignItems: 'center',
-    paddingTop: 80,
-    gap: 12,
-  },
-  emptyTitle: {
-    fontSize: 18,
-    fontWeight: '600',
-    color: Colors.foreground,
-  },
+  unreadText: { fontSize: 10, fontWeight: '700', color: Colors.primaryForeground },
+  chatParticipants: { fontSize: 11, color: Colors.mutedForeground + '70' },
+  empty: { alignItems: 'center', paddingTop: 80, gap: 12 },
+  emptyIcon: { fontSize: 40 },
+  emptyTitle: { fontSize: 18, fontWeight: '600', color: Colors.foreground },
   emptySubtitle: {
     fontSize: 14,
     color: Colors.mutedForeground,

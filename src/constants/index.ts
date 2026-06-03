@@ -29,6 +29,8 @@ export const FIRESTORE_COLLECTIONS = {
   AI_MESSAGES: 'aiMessages',
   USER_BEHAVIOR: 'userBehavior',
   RECOMMENDATIONS: 'recommendations',
+  LEADERBOARDS: 'leaderboards',
+  TYPING: 'typing',
 };
 
 export const STORAGE_KEYS = {

@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useRef } from 'react';
+import React, { useState, useEffect, useRef, useCallback } from 'react';
 import {
   View,
   Text,
@@ -13,66 +13,23 @@ import {
 import { LinearGradient } from 'expo-linear-gradient';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { NativeStackNavigationProp } from '@react-navigation/native-stack';
-import { neonShadow, nativeDriver } from '../utils/platform';
 import { RouteProp } from '@react-navigation/native';
+import { Ionicons } from '@expo/vector-icons';
+import { neonShadow, nativeDriver } from '../utils/platform';
 import { HomeStackParamList } from '../utils/types';
 import { useAuthStore } from '../store/authStore';
-import { subscribeToMessages, sendMessage } from '../firebase/firestore';
+import { useChatStore } from '../store/chatStore';
+import {
+  subscribeToMessages,
+  sendMessage,
+  subscribeToTyping,
+  setTypingIndicator,
+  setUserOnlineStatus,
+} from '../firebase/firestore';
 import { GlassCard } from '../components/common';
 import { Colors, BorderRadius, Spacing } from '../theme';
 import { timeAgo } from '../utils/helpers';
 import type { Message } from '../utils/types';
-
-// Mock messages for demo
-const MOCK_MESSAGES: Message[] = [
-  {
-    id: '1',
-    chatId: 'mock',
-    senderId: 'user_1',
-    senderName: 'Marcus T.',
-    text: 'Hey everyone! Court is reserved for 6 PM. See you all there! 🏀',
-    type: 'text',
-    createdAt: new Date(Date.now() - 30 * 60000),
-    readBy: [],
-  },
-  {
-    id: '2',
-    chatId: 'mock',
-    senderId: 'user_2',
-    senderName: 'Alex C.',
-    text: "Perfect! I'll bring some extra water bottles",
-    type: 'text',
-    createdAt: new Date(Date.now() - 28 * 60000),
-    readBy: [],
-  },
-  {
-    id: '3',
-    chatId: 'mock',
-    senderId: 'user_3',
-    senderName: 'Sarah K.',
-    text: 'That would be helpful! The court balls are usually flat',
-    type: 'text',
-    createdAt: new Date(Date.now() - 24 * 60000),
-    readBy: [],
-  },
-  {
-    id: '4',
-    chatId: 'mock',
-    senderId: 'user_1',
-    senderName: 'Marcus T.',
-    text: 'Yes please! I have one but better to have backup. Also, teams will be picked when everyone arrives',
-    type: 'text',
-    createdAt: new Date(Date.now() - 22 * 60000),
-    readBy: [],
-  },
-];
-
-const ONLINE_USERS = [
-  { id: '1', name: 'Marcus T.', online: true },
-  { id: '2', name: 'Alex C.', online: true },
-  { id: '3', name: 'Sarah K.', online: true },
-  { id: '4', name: 'James W.', online: false },
-];
 
 type Props = {
   navigation: NativeStackNavigationProp<HomeStackParamList, 'ChatScreen'>;
@@ -82,26 +39,48 @@ type Props = {
 export function ChatScreen({ navigation, route }: Props) {
   const { chatId, eventTitle } = route.params;
   const { user } = useAuthStore();
-  const [messages, setMessages] = useState<Message[]>(MOCK_MESSAGES);
+  const { setTypingUser } = useChatStore();
+
+  const [messages, setMessages] = useState<Message[]>([]);
   const [newMessage, setNewMessage] = useState('');
-  const [isTyping] = useState(true);
+  const [typingNames, setTypingNames] = useState<string[]>([]);
+  const [sending, setSending] = useState(false);
+
   const flatListRef = useRef<FlatList>(null);
+  const typingTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const [dot1] = useState(() => new Animated.Value(0));
   const [dot2] = useState(() => new Animated.Value(0));
   const [dot3] = useState(() => new Animated.Value(0));
 
+  // ─── Set online, subscribe messages + typing ────────────────────────────────
   useEffect(() => {
-    // Subscribe to real messages if not mock
-    if (!chatId.startsWith('mock') && !chatId.startsWith('chat_mock')) {
-      const unsubscribe = subscribeToMessages(chatId, (liveMessages) => {
-        if (liveMessages.length > 0) setMessages(liveMessages);
-      });
-      return unsubscribe;
-    }
-  }, [chatId]);
+    if (user?.uid) setUserOnlineStatus(user.uid, true);
 
-  // Typing indicator animation
+    const unsubMessages = subscribeToMessages(chatId, (liveMessages) => {
+      setMessages(liveMessages);
+      setTimeout(() => flatListRef.current?.scrollToEnd({ animated: false }), 50);
+    });
+
+    const unsubTyping = subscribeToTyping(chatId, user?.uid ?? '', (names) => {
+      setTypingNames(names);
+      if (user?.uid) setTypingUser(chatId, user.uid, false);
+    });
+
+    return () => {
+      unsubMessages();
+      unsubTyping();
+      if (user?.uid) {
+        setUserOnlineStatus(user.uid, false);
+        setTypingIndicator(chatId, user.uid, user.displayName, false);
+      }
+    };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [chatId, user?.uid]);
+
+  // ─── Typing animation ────────────────────────────────────────────────────────
   useEffect(() => {
+    if (typingNames.length === 0) return;
+
     const animate = (dot: Animated.Value, delay: number) =>
       Animated.loop(
         Animated.sequence([
@@ -115,15 +94,43 @@ export function ChatScreen({ navigation, route }: Props) {
     animate(dot2, 200);
     animate(dot3, 400);
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, []);
+  }, [typingNames.length > 0]);
 
-  async function handleSend() {
-    if (!newMessage.trim() || !user) return;
+  // ─── Handle text input with typing indicator ───────────────────────────────
+  const handleInputChange = useCallback(
+    (text: string) => {
+      setNewMessage(text);
+      if (!user) return;
+
+      if (text.length > 0) {
+        setTypingIndicator(chatId, user.uid, user.displayName, true);
+        // Debounce stop-typing
+        if (typingTimeoutRef.current) clearTimeout(typingTimeoutRef.current);
+        typingTimeoutRef.current = setTimeout(() => {
+          setTypingIndicator(chatId, user.uid, user.displayName, false);
+        }, 3000);
+      } else {
+        if (typingTimeoutRef.current) clearTimeout(typingTimeoutRef.current);
+        setTypingIndicator(chatId, user.uid, user.displayName, false);
+      }
+    },
+    [chatId, user]
+  );
+
+  // ─── Send message ────────────────────────────────────────────────────────────
+  const handleSend = useCallback(async () => {
+    if (!newMessage.trim() || !user || sending) return;
     const text = newMessage.trim();
     setNewMessage('');
+    setSending(true);
 
+    // Stop typing indicator immediately
+    if (typingTimeoutRef.current) clearTimeout(typingTimeoutRef.current);
+    setTypingIndicator(chatId, user.uid, user.displayName, false);
+
+    // Optimistic update
     const optimisticMsg: Message = {
-      id: Date.now().toString(),
+      id: `opt_${Date.now()}`,
       chatId,
       senderId: user.uid,
       senderName: user.displayName,
@@ -132,8 +139,8 @@ export function ChatScreen({ navigation, route }: Props) {
       createdAt: new Date(),
       readBy: [user.uid],
     };
-
     setMessages((prev) => [...prev, optimisticMsg]);
+    setTimeout(() => flatListRef.current?.scrollToEnd({ animated: true }), 50);
 
     try {
       await sendMessage(chatId, {
@@ -145,35 +152,60 @@ export function ChatScreen({ navigation, route }: Props) {
         readBy: [user.uid],
       });
     } catch {
-      // Message already shown optimistically
+      // Optimistic message shown; real-time listener will reconcile
+    } finally {
+      setSending(false);
     }
+  }, [chatId, newMessage, sending, user]);
 
-    setTimeout(() => flatListRef.current?.scrollToEnd({ animated: true }), 100);
-  }
-
-  function renderMessage({ item }: { item: Message }) {
+  // ─── Render message ────────────────────────────────────────────────────────
+  function renderMessage({ item, index }: { item: Message; index: number }) {
     const isMe = item.senderId === user?.uid;
     const initials = item.senderName.split(' ').map((n) => n[0]).join('').slice(0, 2).toUpperCase();
 
+    // Group: show date separator if day changed
+    const showDate =
+      index === 0 ||
+      new Date(item.createdAt).toDateString() !==
+        new Date(messages[index - 1].createdAt).toDateString();
+
     return (
-      <View style={[styles.messageRow, isMe && styles.messageRowMe]}>
-        {!isMe && (
-          <View style={styles.senderAvatar}>
-            <Text style={styles.senderAvatarText}>{initials}</Text>
+      <>
+        {showDate && (
+          <View style={styles.dateSeparator}>
+            <View style={styles.dateLine} />
+            <Text style={styles.dateText}>
+              {new Date(item.createdAt).toLocaleDateString('en-US', { month: 'short', day: 'numeric' })}
+            </Text>
+            <View style={styles.dateLine} />
           </View>
         )}
-        <View style={[styles.messageBubbleContainer, isMe && styles.messageBubbleContainerMe]}>
-          {!isMe && <Text style={styles.senderName}>{item.senderName}</Text>}
-          <View style={[styles.bubble, isMe ? styles.bubbleMe : styles.bubbleThem]}>
-            <Text style={[styles.bubbleText, isMe && styles.bubbleTextMe]}>{item.text}</Text>
+        <View style={[styles.messageRow, isMe && styles.messageRowMe]}>
+          {!isMe && (
+            <View style={styles.senderAvatar}>
+              <Text style={styles.senderAvatarText}>{initials}</Text>
+            </View>
+          )}
+          <View style={[styles.messageBubbleContainer, isMe && styles.messageBubbleContainerMe]}>
+            {!isMe && <Text style={styles.senderName}>{item.senderName}</Text>}
+            <View style={[styles.bubble, isMe ? styles.bubbleMe : styles.bubbleThem]}>
+              <Text style={[styles.bubbleText, isMe && styles.bubbleTextMe]}>{item.text}</Text>
+            </View>
+            <Text style={[styles.messageTime, isMe && styles.messageTimeMe]}>
+              {timeAgo(item.createdAt)}
+            </Text>
           </View>
-          <Text style={[styles.messageTime, isMe && styles.messageTimeMe]}>
-            {timeAgo(item.createdAt)}
-          </Text>
         </View>
-      </View>
+      </>
     );
   }
+
+  const typingLabel =
+    typingNames.length === 1
+      ? `${typingNames[0]} is typing...`
+      : typingNames.length > 1
+      ? `${typingNames.join(', ')} are typing...`
+      : '';
 
   return (
     <LinearGradient colors={['#0a0a0a', '#0f0f14', '#0a0a0a']} style={styles.container}>
@@ -181,59 +213,16 @@ export function ChatScreen({ navigation, route }: Props) {
         {/* Header */}
         <GlassCard style={styles.header}>
           <TouchableOpacity onPress={() => navigation.goBack()} style={styles.backButton}>
-            <Text style={styles.backText}>←</Text>
+            <Ionicons name="chevron-back" size={22} color={Colors.foreground} />
           </TouchableOpacity>
           <View style={styles.headerInfo}>
             <Text style={styles.headerTitle} numberOfLines={1}>{eventTitle}</Text>
             <View style={styles.onlineRow}>
-              <View style={styles.onlineAvatars}>
-                {ONLINE_USERS.slice(0, 3).map((u) => (
-                  <View key={u.id} style={styles.miniAvatar}>
-                    <Text style={styles.miniAvatarText}>{u.name.slice(0, 2)}</Text>
-                  </View>
-                ))}
-              </View>
-              <Text style={styles.onlineCount}>
-                {ONLINE_USERS.filter((u) => u.online).length} online
-              </Text>
+              <View style={styles.onlineDotGreen} />
+              <Text style={styles.onlineCount}>Game Chat</Text>
             </View>
           </View>
-          <TouchableOpacity style={styles.moreButton}>
-            <Text style={styles.moreText}>⋮</Text>
-          </TouchableOpacity>
         </GlassCard>
-
-        {/* Online users strip */}
-        <View style={styles.onlineStrip}>
-          {ONLINE_USERS.map((u) => (
-            <View key={u.id} style={styles.onlineUser}>
-              <View style={styles.onlineUserAvatar}>
-                <View
-                  style={[
-                    styles.onlineAvatarCircle,
-                    u.online ? styles.onlineAvatarActive : styles.onlineAvatarInactive,
-                  ]}
-                >
-                  <Text
-                    style={[
-                      styles.onlineAvatarText,
-                      u.online ? styles.onlineAvatarTextActive : null,
-                    ]}
-                  >
-                    {u.name.slice(0, 2)}
-                  </Text>
-                </View>
-                <View
-                  style={[
-                    styles.onlineDot,
-                    { backgroundColor: u.online ? Colors.success : Colors.mutedForeground + '80' },
-                  ]}
-                />
-              </View>
-              <Text style={styles.onlineUserName} numberOfLines={1}>{u.name}</Text>
-            </View>
-          ))}
-        </View>
 
         {/* Messages */}
         <KeyboardAvoidingView
@@ -249,16 +238,26 @@ export function ChatScreen({ navigation, route }: Props) {
             contentContainerStyle={styles.messagesList}
             showsVerticalScrollIndicator={false}
             onContentSizeChange={() => flatListRef.current?.scrollToEnd({ animated: false })}
+            ListEmptyComponent={
+              <View style={styles.emptyChat}>
+                <Text style={styles.emptyChatIcon}>💬</Text>
+                <Text style={styles.emptyChatText}>No messages yet</Text>
+                <Text style={styles.emptyChatSub}>Be the first to say something!</Text>
+              </View>
+            }
             ListFooterComponent={
-              isTyping ? (
+              typingNames.length > 0 ? (
                 <View style={styles.typingRow}>
                   <View style={styles.senderAvatar}>
-                    <Text style={styles.senderAvatarText}>MT</Text>
+                    <Text style={styles.senderAvatarText}>
+                      {typingNames[0].slice(0, 2).toUpperCase()}
+                    </Text>
                   </View>
                   <GlassCard style={styles.typingBubble}>
                     <Animated.View style={[styles.typingDot, { transform: [{ translateY: dot1 }] }]} />
                     <Animated.View style={[styles.typingDot, { transform: [{ translateY: dot2 }] }]} />
                     <Animated.View style={[styles.typingDot, { transform: [{ translateY: dot3 }] }]} />
+                    <Text style={styles.typingLabel}>{typingLabel}</Text>
                   </GlassCard>
                 </View>
               ) : null
@@ -272,16 +271,16 @@ export function ChatScreen({ navigation, route }: Props) {
               placeholder="Type a message..."
               placeholderTextColor={Colors.mutedForeground + '80'}
               value={newMessage}
-              onChangeText={setNewMessage}
+              onChangeText={handleInputChange}
               multiline
               maxLength={500}
             />
             <TouchableOpacity
-              style={[styles.sendButton, !newMessage.trim() && styles.sendButtonDisabled]}
+              style={[styles.sendButton, (!newMessage.trim() || sending) && styles.sendButtonDisabled]}
               onPress={handleSend}
-              disabled={!newMessage.trim()}
+              disabled={!newMessage.trim() || sending}
             >
-              <Text style={styles.sendIcon}>Send</Text>
+              <Ionicons name="send" size={16} color={Colors.primaryForeground} />
             </TouchableOpacity>
           </GlassCard>
         </KeyboardAvoidingView>
@@ -312,129 +311,40 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     justifyContent: 'center',
   },
-  backText: {
-    color: Colors.foreground,
-    fontSize: 20,
-    fontWeight: '600',
-  },
   headerInfo: { flex: 1 },
-  headerTitle: {
-    fontSize: 16,
-    fontWeight: '600',
-    color: Colors.foreground,
+  headerTitle: { fontSize: 16, fontWeight: '700', color: Colors.foreground },
+  onlineRow: { flexDirection: 'row', alignItems: 'center', gap: 6, marginTop: 2 },
+  onlineDotGreen: {
+    width: 8,
+    height: 8,
+    borderRadius: 4,
+    backgroundColor: Colors.success,
   },
-  onlineRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 6,
-    marginTop: 2,
-  },
-  onlineAvatars: {
-    flexDirection: 'row',
-  },
-  miniAvatar: {
-    width: 20,
-    height: 20,
-    borderRadius: 10,
-    backgroundColor: Colors.secondary,
-    borderWidth: 1,
-    borderColor: Colors.card,
-    alignItems: 'center',
-    justifyContent: 'center',
-    marginLeft: -4,
-  },
-  miniAvatarText: {
-    fontSize: 7,
-    color: Colors.mutedForeground,
-    fontWeight: '600',
-  },
-  onlineCount: {
-    fontSize: 11,
-    color: Colors.mutedForeground,
-  },
-  moreButton: {
-    width: 40,
-    height: 40,
-    borderRadius: 20,
-    backgroundColor: Colors.secondary,
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
-  moreText: {
-    color: Colors.mutedForeground,
-    fontSize: 20,
-    lineHeight: 24,
-  },
-  onlineStrip: {
-    flexDirection: 'row',
-    paddingHorizontal: Spacing.lg,
-    paddingVertical: 12,
-    gap: 16,
-    borderBottomWidth: 1,
-    borderBottomColor: Colors.border + '40',
-  },
-  onlineUser: {
-    alignItems: 'center',
-    gap: 4,
-  },
-  onlineUserAvatar: { position: 'relative' },
-  onlineAvatarCircle: {
-    width: 44,
-    height: 44,
-    borderRadius: 22,
-    alignItems: 'center',
-    justifyContent: 'center',
-    borderWidth: 1,
-  },
-  onlineAvatarActive: {
-    backgroundColor: Colors.primaryDim,
-    borderColor: Colors.primaryBorder,
-  },
-  onlineAvatarInactive: {
-    backgroundColor: Colors.secondary,
-    borderColor: Colors.border,
-  },
-  onlineAvatarText: {
-    fontSize: 12,
-    fontWeight: '600',
-    color: Colors.mutedForeground,
-  },
-  onlineAvatarTextActive: {
-    color: Colors.primary,
-  },
-  onlineDot: {
-    position: 'absolute',
-    bottom: 0,
-    right: 0,
-    width: 12,
-    height: 12,
-    borderRadius: 6,
-    borderWidth: 2,
-    borderColor: Colors.card,
-  },
-  onlineUserName: {
-    fontSize: 10,
-    color: Colors.mutedForeground,
-    maxWidth: 44,
-  },
+  onlineCount: { fontSize: 11, color: Colors.mutedForeground },
   keyboardView: { flex: 1 },
   messagesList: {
     paddingHorizontal: Spacing.lg,
     paddingVertical: Spacing.base,
-    gap: 16,
+    gap: 10,
   },
+  dateSeparator: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 8,
+    marginVertical: 8,
+  },
+  dateLine: { flex: 1, height: 1, backgroundColor: Colors.border + '60' },
+  dateText: { fontSize: 11, color: Colors.mutedForeground, fontWeight: '500' },
   messageRow: {
     flexDirection: 'row',
     gap: 10,
     alignItems: 'flex-end',
   },
-  messageRowMe: {
-    flexDirection: 'row-reverse',
-  },
+  messageRowMe: { flexDirection: 'row-reverse' },
   senderAvatar: {
-    width: 36,
-    height: 36,
-    borderRadius: 18,
+    width: 32,
+    height: 32,
+    borderRadius: 16,
     backgroundColor: Colors.primaryDim,
     borderWidth: 1,
     borderColor: Colors.primaryBorder,
@@ -442,75 +352,39 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
     flexShrink: 0,
   },
-  senderAvatarText: {
-    fontSize: 11,
-    fontWeight: '600',
-    color: Colors.primary,
-  },
-  messageBubbleContainer: {
-    maxWidth: '75%',
-    gap: 4,
-  },
-  messageBubbleContainerMe: {
-    alignItems: 'flex-end',
-  },
-  senderName: {
-    fontSize: 11,
-    color: Colors.mutedForeground,
-    marginLeft: 4,
-  },
-  bubble: {
-    borderRadius: BorderRadius.xl,
-    paddingHorizontal: 16,
-    paddingVertical: 10,
-  },
-  bubbleMe: {
-    backgroundColor: Colors.primary,
-    borderBottomRightRadius: 4,
-  },
+  senderAvatarText: { fontSize: 10, fontWeight: '700', color: Colors.primary },
+  messageBubbleContainer: { maxWidth: '75%', gap: 3 },
+  messageBubbleContainerMe: { alignItems: 'flex-end' },
+  senderName: { fontSize: 10, color: Colors.mutedForeground, marginLeft: 4 },
+  bubble: { borderRadius: BorderRadius.xl, paddingHorizontal: 14, paddingVertical: 9 },
+  bubbleMe: { backgroundColor: Colors.primary, borderBottomRightRadius: 4 },
   bubbleThem: {
     backgroundColor: Colors.glass,
     borderWidth: 1,
     borderColor: Colors.glassBorder,
     borderBottomLeftRadius: 4,
   },
-  bubbleText: {
-    fontSize: 14,
-    color: Colors.foreground,
-    lineHeight: 20,
-  },
-  bubbleTextMe: {
-    color: Colors.primaryForeground,
-  },
-  messageTime: {
-    fontSize: 10,
-    color: Colors.mutedForeground,
-    marginLeft: 4,
-  },
-  messageTimeMe: {
-    marginLeft: 0,
-    marginRight: 4,
-  },
-  typingRow: {
-    flexDirection: 'row',
-    gap: 10,
-    alignItems: 'flex-end',
-    marginTop: 8,
-  },
+  bubbleText: { fontSize: 14, color: Colors.foreground, lineHeight: 20 },
+  bubbleTextMe: { color: Colors.primaryForeground },
+  messageTime: { fontSize: 10, color: Colors.mutedForeground, marginLeft: 4 },
+  messageTimeMe: { marginLeft: 0, marginRight: 4 },
+  typingRow: { flexDirection: 'row', gap: 10, alignItems: 'flex-end', marginTop: 4 },
   typingBubble: {
     flexDirection: 'row',
-    paddingHorizontal: 16,
-    paddingVertical: 14,
+    paddingHorizontal: 14,
+    paddingVertical: 10,
     gap: 4,
     alignItems: 'center',
     borderBottomLeftRadius: 4,
+    flexWrap: 'wrap',
   },
   typingDot: {
-    width: 8,
-    height: 8,
-    borderRadius: 4,
+    width: 7,
+    height: 7,
+    borderRadius: 3.5,
     backgroundColor: Colors.mutedForeground + '80',
   },
+  typingLabel: { fontSize: 11, color: Colors.mutedForeground, marginLeft: 4 },
   inputArea: {
     flexDirection: 'row',
     alignItems: 'center',
@@ -523,16 +397,8 @@ const styles = StyleSheet.create({
     borderLeftWidth: 0,
     borderRightWidth: 0,
   },
-  attachButton: {
-    width: 40,
-    height: 40,
-    borderRadius: 20,
-    backgroundColor: Colors.secondary,
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
-  attachIcon: { fontSize: 18 },
-  input: {    flex: 1,
+  input: {
+    flex: 1,
     backgroundColor: 'rgba(24,24,30,0.5)',
     borderRadius: BorderRadius.full,
     borderWidth: 1,
@@ -544,7 +410,7 @@ const styles = StyleSheet.create({
     maxHeight: 100,
   },
   sendButton: {
-    paddingHorizontal: 16,
+    width: 40,
     height: 40,
     borderRadius: 20,
     backgroundColor: Colors.primary,
@@ -552,12 +418,9 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
     ...neonShadow(Colors.primary, 8, 0.4),
   },
-  sendButtonDisabled: {
-    opacity: 0.5,
-  },
-  sendIcon: {
-    color: Colors.primaryForeground,
-    fontSize: 13,
-    fontWeight: '700',
-  },
+  sendButtonDisabled: { opacity: 0.45 },
+  emptyChat: { alignItems: 'center', paddingTop: 60, gap: 8 },
+  emptyChatIcon: { fontSize: 40 },
+  emptyChatText: { fontSize: 16, fontWeight: '600', color: Colors.foreground },
+  emptyChatSub: { fontSize: 13, color: Colors.mutedForeground },
 });

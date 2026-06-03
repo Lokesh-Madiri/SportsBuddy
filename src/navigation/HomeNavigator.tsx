@@ -4,10 +4,12 @@ import { HomeStackParamList } from '../utils/types';
 import { HomeScreen } from '../screens/HomeScreen';
 import { MatchDetailsScreen } from '../screens/MatchDetailsScreen';
 import { CreateGameScreen } from '../screens/CreateGameScreen';
+import { EditGameScreen } from '../screens/EditGameScreen';
 import { ChatScreen } from '../screens/ChatScreen';
 import { PostMatchRatingScreen } from '../screens/PostMatchRatingScreen';
 import { AllEventsScreen } from '../screens/AllEventsScreen';
 import { DiscoverScreen } from '../screens/DiscoverScreen';
+import { LeaderboardScreen } from '../screens/LeaderboardScreen';
 
 const Stack = createNativeStackNavigator<HomeStackParamList>();
 
@@ -24,10 +26,11 @@ export function HomeNavigator() {
       <Stack.Screen name="MatchDetails" component={MatchDetailsScreen} />
       <Stack.Screen name="PostMatchRating" component={PostMatchRatingScreen} />
       <Stack.Screen name="CreateGame" component={CreateGameScreen} />
+      <Stack.Screen name="EditGame" component={EditGameScreen} />
       <Stack.Screen name="ChatScreen" component={ChatScreen} />
       <Stack.Screen name="AllEvents" component={AllEventsScreen} />
-      {/* AllPlayers reuses DiscoverScreen filtered to players */}
       <Stack.Screen name="AllPlayers" component={DiscoverScreen} />
+      <Stack.Screen name="Leaderboard" component={LeaderboardScreen} />
     </Stack.Navigator>
   );
 }
