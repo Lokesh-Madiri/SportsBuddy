@@ -74,3 +74,5 @@ skills-lock.json
 # Misc
 # =========================
 *.orig.*
+.kiro
+location_flow.drawio

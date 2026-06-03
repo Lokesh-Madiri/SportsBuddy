@@ -8,6 +8,9 @@ import {
   Alert,
   KeyboardAvoidingView,
   Platform,
+  ActivityIndicator,
+  Image,
+  Modal,
 } from 'react-native';
 import { LinearGradient } from 'expo-linear-gradient';
 import { SafeAreaView } from 'react-native-safe-area-context';
@@ -17,6 +20,7 @@ import { neonShadow } from '../utils/platform';
 import { useAuthStore } from '../store/authStore';
 import { createEvent } from '../firebase/firestore';
 import { aiService } from '../services/aiService';
+import { locationService, geocodingService } from '../services/locationService';
 import { PrimaryButton, InputField, GlassCard } from '../components/common';
 import { Colors, BorderRadius, Spacing } from '../theme';
 import { SPORTS, SKILL_LEVELS } from '../constants';
@@ -28,9 +32,61 @@ type Props = {
 
 const STEPS = [
   { number: 1, title: 'Sport' },
-  { number: 2, title: 'Details' },
-  { number: 3, title: 'Review' },
+  { number: 2, title: 'Time' },
+  { number: 3, title: 'Location' },
+  { number: 4, title: 'Review' },
 ];
+
+const SPORT_IMAGES: Record<string, string> = {
+  Basketball: 'https://images.unsplash.com/photo-1546519638-68e109498ffc?w=400&q=80',
+  Soccer: 'https://images.unsplash.com/photo-1508098682722-e99c43a406b2?w=400&q=80',
+  Tennis: 'https://images.unsplash.com/photo-1595435934249-5df7ed86e1c0?w=400&q=80',
+  Volleyball: 'https://images.unsplash.com/photo-1592656094267-764a45159575?w=400&q=80',
+  Running: 'https://images.unsplash.com/photo-1476480862126-209bfaa8edc8?w=400&q=80',
+  Swimming: 'https://images.unsplash.com/photo-1519766304817-4f37bda74a27?w=400&q=80',
+  Golf: 'https://images.unsplash.com/photo-1535131749006-b7f58c99034b?w=400&q=80',
+  Baseball: 'https://images.unsplash.com/photo-1530541930197-ff16ac917b0e?w=400&q=80',
+  Cycling: 'https://images.unsplash.com/photo-1485965120184-e220f721d03e?w=400&q=80',
+  Badminton: 'https://images.unsplash.com/photo-1626224583764-f87db24ac4ea?w=400&q=80',
+};
+
+const getSportImage = (sportName: string): string => {
+  return SPORT_IMAGES[sportName] || 'https://images.unsplash.com/photo-1517649763962-0c623066013b?w=400&q=80';
+};
+
+interface VenueImageProps {
+  uri: string;
+  fallbackUri: string;
+  style: any;
+}
+
+const VenueImage = ({ uri, fallbackUri, style }: VenueImageProps) => {
+  const [currentUri, setCurrentUri] = useState(uri);
+  const [hasError, setHasError] = useState(false);
+
+  useEffect(() => {
+    setCurrentUri(uri);
+    setHasError(false);
+  }, [uri]);
+
+  return (
+    <Image
+      source={{
+        uri: hasError ? fallbackUri : currentUri,
+        headers: { 'User-Agent': 'SportsBuddy/1.0 (contact@sportsbuddy.com)' },
+        cache: 'force-cache'
+      }}
+      style={style}
+      resizeMode="cover"
+      onError={() => {
+        if (!hasError) {
+          setHasError(true);
+        }
+      }}
+    />
+  );
+};
+
 
 export function CreateGameScreen({ navigation }: Props) {
   const { user } = useAuthStore();
@@ -46,6 +102,27 @@ export function CreateGameScreen({ navigation }: Props) {
   const [loading, setLoading] = useState(false);
   const [aiSuggestion, setAiSuggestion] = useState<string>('');
 
+  // Location search states
+  const [locationQuery, setLocationQuery] = useState('');
+  const [locationResults, setLocationResults] = useState<any[]>([]);
+  const [isSearchingLocation, setIsSearchingLocation] = useState(false);
+  const [aiLocations, setAiLocations] = useState<any[]>([]);
+  const [userCoords, setUserCoords] = useState<any>(null);
+  const [isAiLoading, setIsAiLoading] = useState(false);
+  const [userCity, setUserCity] = useState('');
+  const [aiError, setAiError] = useState<string>('');
+  const [isLocationInitializing, setIsLocationInitializing] = useState(false);
+
+  const publicLocations = aiLocations.filter((loc) => loc.type !== 'private');
+  const privateLocations = aiLocations.filter((loc) => loc.type === 'private');
+
+  // Carousel Modal States
+  const [showImageModal, setShowImageModal] = useState(false);
+  const [selectedGround, setSelectedGround] = useState<any>(null);
+  const [currentImageIndex, setCurrentImageIndex] = useState(0);
+  const [modalImages, setModalImages] = useState<string[]>([]);
+  const [isModalImagesLoading, setIsModalImagesLoading] = useState(false);
+
   // Calendar states
   const [calendarMonth, setCalendarMonth] = useState(new Date().getMonth());
   const [calendarYear, setCalendarYear] = useState(new Date().getFullYear());
@@ -56,6 +133,112 @@ export function CreateGameScreen({ navigation }: Props) {
   const [selectedMinute, setSelectedMinute] = useState('00');
   const [selectedAmPm, setSelectedAmPm] = useState('PM');
   const [showTimePicker, setShowTimePicker] = useState(false);
+
+  const SPORT_CAROUSEL_IMAGES: Record<string, string[]> = {
+    Basketball: [
+      'https://images.unsplash.com/photo-1546519638-68e109498ffc?w=600&q=80',
+      'https://images.unsplash.com/photo-1519766304817-4f37bda74a27?w=600&q=80',
+      'https://images.unsplash.com/photo-1574629810360-7efbbe195018?w=600&q=80',
+    ],
+    Soccer: [
+      'https://images.unsplash.com/photo-1508098682722-e99c43a406b2?w=600&q=80',
+      'https://images.unsplash.com/photo-1543351611-58f69d7c1781?w=600&q=80',
+      'https://images.unsplash.com/photo-1551958219-acbc608c6377?w=600&q=80',
+    ],
+    Tennis: [
+      'https://images.unsplash.com/photo-1595435934249-5df7ed86e1c0?w=600&q=80',
+      'https://images.unsplash.com/photo-1622279457486-62dcc4a431d6?w=600&q=80',
+      'https://images.unsplash.com/photo-1554068865-24cecd4e34b8?w=600&q=80',
+    ],
+    Volleyball: [
+      'https://images.unsplash.com/photo-1592656094267-764a45159575?w=600&q=80',
+      'https://images.unsplash.com/photo-1579758629938-03607ccdbaba?w=600&q=80',
+      'https://images.unsplash.com/photo-1612872087720-bb876e2e67d1?w=600&q=80',
+    ],
+    Running: [
+      'https://images.unsplash.com/photo-1476480862126-209bfaa8edc8?w=600&q=80',
+      'https://images.unsplash.com/photo-1502904582529-0a1514896a2e?w=600&q=80',
+      'https://images.unsplash.com/photo-1486218119243-13883505764c?w=600&q=80',
+    ],
+    Swimming: [
+      'https://images.unsplash.com/photo-1519766304817-4f37bda74a27?w=600&q=80',
+      'https://images.unsplash.com/photo-1576013551627-0cc20b96c2a7?w=600&q=80',
+      'https://images.unsplash.com/photo-1468476775582-6bede20f356f?w=600&q=80',
+    ],
+    Golf: [
+      'https://images.unsplash.com/photo-1535131749006-b7f58c99034b?w=600&q=80',
+      'https://images.unsplash.com/photo-1587174486073-ae5e5cff23aa?w=600&q=80',
+      'https://images.unsplash.com/photo-1460889418202-14dfcbe1546d?w=600&q=80',
+    ],
+    Baseball: [
+      'https://images.unsplash.com/photo-1530541930197-ff16ac917b0e?w=600&q=80',
+      'https://images.unsplash.com/photo-1471295263379-6ca2d418873f?w=600&q=80',
+      'https://images.unsplash.com/photo-1544045564-9473b5a9c97b?w=600&q=80',
+    ],
+    Cycling: [
+      'https://images.unsplash.com/photo-1485965120184-e220f721d03e?w=600&q=80',
+      'https://images.unsplash.com/photo-1541614101331-1a5a3a194e92?w=600&q=80',
+      'https://images.unsplash.com/photo-1517649763962-0c623066013b?w=600&q=80',
+    ],
+    Badminton: [
+      'https://images.unsplash.com/photo-1626224583764-f87db24ac4ea?w=600&q=80',
+      'https://images.unsplash.com/photo-1613918431201-6c41b80c3556?w=600&q=80',
+      'https://images.unsplash.com/photo-1521537634199-673cb821b7fc?w=600&q=80',
+    ],
+  };
+
+  const handleLongPress = async (ground: any) => {
+    console.log('[CreateGameScreen Logger] Long pressed ground:', ground);
+    setSelectedGround(ground);
+    setShowImageModal(true);
+    setCurrentImageIndex(0);
+    
+    if (ground.images && ground.images.length > 0) {
+      console.log(`[CreateGameScreen Logger] Using pre-fetched specific venue images:`, ground.images);
+      setModalImages(ground.images);
+      setIsModalImagesLoading(false);
+    } else {
+      console.log(`[CreateGameScreen Logger] No pre-fetched venue images. Falling back to sport-themed images.`);
+      setModalImages(SPORT_CAROUSEL_IMAGES[sport] || [getSportImage(sport)]);
+      setIsModalImagesLoading(false);
+    }
+  };
+
+  const handlePrevImage = () => {
+    setCurrentImageIndex((prev) => (prev === 0 ? modalImages.length - 1 : prev - 1));
+  };
+
+  const handleNextImage = () => {
+    setCurrentImageIndex((prev) => (prev === modalImages.length - 1 ? 0 : prev + 1));
+  };
+
+  useEffect(() => {
+    if (userCity && !userCoords) {
+      const getCityCoords = async () => {
+        console.log(`[CreateGameScreen Logger] Attempting to geocode city "${userCity}" for fallback coordinates...`);
+        setIsLocationInitializing(true);
+        try {
+          const res = await fetch(`https://nominatim.openstreetmap.org/search?q=${encodeURIComponent(userCity)}&format=json&limit=1`, {
+            headers: {
+              'User-Agent': 'SportsBuddy/1.0',
+            },
+          });
+          const data = await res.json();
+          if (data && data[0]) {
+            const lat = parseFloat(data[0].lat);
+            const lon = parseFloat(data[0].lon);
+            console.log('[CreateGameScreen Logger] Resolved city center coords for fallback distances:', lat, lon);
+            setUserCoords({ latitude: lat, longitude: lon });
+          }
+        } catch (e) {
+          console.error('[CreateGameScreen Logger] Failed to resolve city coords:', e);
+        } finally {
+          setIsLocationInitializing(false);
+        }
+      };
+      getCityCoords();
+    }
+  }, [userCity, userCoords]);
 
   const handleSelectTime = (h: string, m: string, ap: string) => {
     setSelectedHour(h);
@@ -100,6 +283,96 @@ export function CreateGameScreen({ navigation }: Props) {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
+  useEffect(() => {
+    if (locationQuery.length > 2) {
+      const delay = setTimeout(async () => {
+        setIsSearchingLocation(true);
+        try {
+          const res = await fetch(`https://nominatim.openstreetmap.org/search?q=${encodeURIComponent(locationQuery)}&format=json&limit=5`, {
+            headers: {
+              'User-Agent': 'SportsBuddy/1.0',
+            },
+          });
+          const data = await res.json();
+          setLocationResults(data.map((item: any) => ({
+            name: item.name,
+            address: item.display_name
+          })));
+        } catch (e) {} finally {
+          setIsSearchingLocation(false);
+        }
+      }, 600);
+      return () => clearTimeout(delay);
+    } else {
+      setLocationResults([]);
+    }
+  }, [locationQuery]);
+
+  useEffect(() => {
+    const initLocation = async () => {
+      console.log('[CreateGameScreen Logger] Initializing user location fetching on mount...');
+      setIsLocationInitializing(true);
+      try {
+        const coords = await locationService.getCurrentLocation();
+        console.log('[CreateGameScreen Logger] Coordinates fetched:', coords);
+        if (coords) {
+          setUserCoords(coords);
+          console.log('[CreateGameScreen Logger] Resolving city for coordinates...');
+          const city = await geocodingService.getCity(coords);
+          console.log('[CreateGameScreen Logger] Resolved city:', city);
+          if (city) {
+            setUserCity(city);
+          } else {
+            console.log('[CreateGameScreen Logger] geocodingService.getCity returned undefined city.');
+            setAiError('Unable to determine your city from coordinates.');
+          }
+        } else {
+          console.log('[CreateGameScreen Logger] locationService.getCurrentLocation returned null coordinates.');
+          setAiError('Could not access current location. Please ensure location permissions are enabled.');
+        }
+      } catch (e: any) {
+        console.error('[CreateGameScreen Logger] [Error] Failed to initialize user location:', e);
+        setAiError(`Failed to initialize location: ${e.message || e}`);
+      } finally {
+        setIsLocationInitializing(false);
+      }
+    };
+    initLocation();
+  }, []);
+
+  useEffect(() => {
+    console.log(`[CreateGameScreen Logger] useEffect triggered. sport: "${sport}", userCity: "${userCity}", userCoords: ${!!userCoords}, aiLocations count: ${aiLocations.length}`);
+    if (sport && userCity) {
+      const fetchAiLocs = async () => {
+        if (aiLocations.length > 0) {
+          console.log('[CreateGameScreen Logger] AI location suggestions already fetched, skipping.');
+          return;
+        }
+        console.log(`[CreateGameScreen Logger] Starting fetch for AI location suggestions. City: "${userCity}", Sport: "${sport}"`);
+        setIsAiLoading(true);
+        setAiError('');
+        try {
+          const suggestions = await aiService.getLocationSuggestions(userCity, sport, userCoords);
+          console.log('[CreateGameScreen Logger] AI location suggestions successfully fetched:', suggestions);
+          setAiLocations(suggestions);
+        } catch (error: any) {
+          console.error('[CreateGameScreen Logger] [Error] Failed to fetch AI locations:', error);
+          setAiError(error.message || 'Failed to fetch AI suggestions');
+        } finally {
+          setIsAiLoading(false);
+        }
+      };
+      fetchAiLocs();
+    } else {
+      if (!sport) {
+        console.log('[CreateGameScreen Logger] AI suggestion fetch skipped: sport is empty.');
+      }
+      if (!userCity) {
+        console.log('[CreateGameScreen Logger] AI suggestion fetch skipped: userCity is empty.');
+      }
+    }
+  }, [sport, userCity, userCoords, aiLocations.length]);
+
   function validateStep1() {
     if (!sport) {
       Alert.alert('Missing Info', 'Please select a sport');
@@ -121,11 +394,6 @@ export function CreateGameScreen({ navigation }: Props) {
       Alert.alert('Missing Info', 'Please enter a time (e.g. 6:00 PM)');
       return false;
     }
-    if (!location.trim()) {
-      Alert.alert('Missing Info', 'Please enter a location');
-      return false;
-    }
-
     // Future date/time validation
     const combined = parseDateTime(date, time);
     if (isNaN(combined.getTime())) {
@@ -139,6 +407,14 @@ export function CreateGameScreen({ navigation }: Props) {
     return true;
   }
 
+  function validateStep3() {
+    if (!location.trim()) {
+      Alert.alert('Missing Info', 'Please select or enter a location');
+      return false;
+    }
+    return true;
+  }
+
   const handleNext = () => {
     if (currentStep === 1) {
       if (validateStep1()) {
@@ -147,6 +423,10 @@ export function CreateGameScreen({ navigation }: Props) {
     } else if (currentStep === 2) {
       if (validateStep2()) {
         setCurrentStep(3);
+      }
+    } else if (currentStep === 3) {
+      if (validateStep3()) {
+        setCurrentStep(4);
       }
     }
   };
@@ -384,7 +664,7 @@ export function CreateGameScreen({ navigation }: Props) {
           <View>
             <Text style={styles.headerTitle}>Create Game</Text>
             <Text style={styles.headerSubtitle}>
-              Step {currentStep} of 3: {STEPS[currentStep - 1].title}
+              Step {currentStep} of {STEPS.length}: {STEPS[currentStep - 1].title}
             </Text>
           </View>
         </View>
@@ -465,13 +745,43 @@ export function CreateGameScreen({ navigation }: Props) {
                 <View style={styles.field}>
                   <Text style={styles.fieldLabel}>Sport Type</Text>
                   <TouchableOpacity
-                    onPress={() => setShowSportPicker(!showSportPicker)}
-                    style={styles.picker}
+                    onPress={() => {
+                      if (sport) {
+                        Alert.alert(
+                          'Sport Type Locked',
+                          'The sport type cannot be changed once selected. If you selected the wrong sport, would you like to reset the form and start again?',
+                          [
+                            {
+                              text: 'Cancel',
+                              style: 'cancel',
+                            },
+                            {
+                              text: 'Reset Form',
+                              style: 'destructive',
+                              onPress: () => {
+                                setSport('');
+                                setSkillLevel('');
+                                setDate('');
+                                setTime('6:00 PM');
+                                setLocation('');
+                                setMaxPlayers('10');
+                                setDescription('');
+                                setAiLocations([]);
+                                setLocationQuery('');
+                              },
+                            },
+                          ]
+                        );
+                      } else {
+                        setShowSportPicker(!showSportPicker);
+                      }
+                    }}
+                    style={[styles.picker, sport ? styles.pickerLocked : null]}
                   >
                     <Text style={sport ? styles.pickerValue : styles.pickerPlaceholder}>
                       {sport ? sport : 'Select a sport'}
                     </Text>
-                    <Text style={styles.chevron}>{showSportPicker ? '▲' : '▼'}</Text>
+                    <Text style={styles.chevron}>{sport ? '🔒' : showSportPicker ? '▲' : '▼'}</Text>
                   </TouchableOpacity>
                   {showSportPicker && (
                     <GlassCard style={styles.dropdown}>
@@ -551,20 +861,179 @@ export function CreateGameScreen({ navigation }: Props) {
 
                 {showCalendar && renderCalendar()}
                 {showTimePicker && renderTimePicker()}
-
-                {/* Location */}
-                <InputField
-                  label="Location"
-                  placeholder="Enter location or address"
-                  value={location}
-                  onChangeText={setLocation}
-                  containerStyle={styles.fieldSpacing}
-                />
               </View>
             )}
 
-            {/* Step 3: Details & Review */}
+            {/* Step 3: Location */}
             {currentStep === 3 && (
+              <View style={styles.stepContainer}>
+                <InputField
+                  label="Search Location"
+                  placeholder="Start typing to search..."
+                  value={locationQuery}
+                  onChangeText={(text) => {
+                    setLocationQuery(text);
+                    setLocation(text);
+                  }}
+                  containerStyle={styles.fieldSpacing}
+                />
+                {isSearchingLocation && (
+                  <ActivityIndicator color={Colors.primary} style={{ marginTop: 8 }} />
+                )}
+                {locationResults.length > 0 && (
+                  <GlassCard style={styles.locationResultsCard}>
+                    <Text style={styles.sectionTitle}>Search Results</Text>
+                    {locationResults.map((loc, i) => (
+                      <TouchableOpacity
+                        key={i}
+                        style={styles.locationItem}
+                        onPress={() => {
+                          setLocation(loc.address);
+                          setLocationQuery(loc.name || loc.address);
+                          setLocationResults([]);
+                        }}
+                      >
+                        <Text style={styles.locationItemName}>{loc.name || loc.address}</Text>
+                        {loc.name && <Text style={styles.locationItemAddress}>{loc.address}</Text>}
+                      </TouchableOpacity>
+                    ))}
+                  </GlassCard>
+                )}
+
+                <View style={styles.divider} />
+
+                <Text style={styles.sectionTitle}>Publicly Available Grounds (Free)</Text>
+                {publicLocations.length > 0 && !isLocationInitializing && !isAiLoading && (
+                  <Text style={styles.hintText}>💡 Long press any card to view ground photos</Text>
+                )}
+                {isLocationInitializing ? (
+                  <View style={styles.spinnerContainer}>
+                    <ActivityIndicator color={Colors.primary} style={{ marginTop: 16 }} />
+                    <Text style={styles.spinnerSubtext}>Finding your location...</Text>
+                  </View>
+                ) : isAiLoading ? (
+                  <View style={styles.spinnerContainer}>
+                    <ActivityIndicator color={Colors.primary} style={{ marginTop: 16 }} />
+                    <Text style={styles.spinnerSubtext}>Searching community grounds & private turfs...</Text>
+                  </View>
+                ) : aiError ? (
+                  <Text style={[styles.aiText, { color: '#ef4444', marginTop: 16 }]}>{aiError}</Text>
+                ) : publicLocations.length > 0 ? (
+                  <View style={styles.groundsContainer}>
+                    {publicLocations.map((aiLoc, index) => {
+                      const isSelected = location === aiLoc.name;
+                      const imageUrl = aiLoc.images && aiLoc.images.length > 0
+                        ? aiLoc.images[0]
+                        : getSportImage(sport);
+                      return (
+                        <TouchableOpacity
+                          key={index}
+                          style={[
+                            styles.groundCard,
+                            isSelected && styles.groundCardActive
+                          ]}
+                          onPress={() => {
+                            setLocation(aiLoc.name);
+                            setLocationQuery(aiLoc.name);
+                          }}
+                          onLongPress={() => handleLongPress(aiLoc)}
+                          delayLongPress={350}
+                        >
+                          <VenueImage
+                            uri={imageUrl}
+                            fallbackUri={getSportImage(sport)}
+                            style={styles.groundCardImage}
+                          />
+                          <View style={styles.groundCardDetails}>
+                            <Text style={[
+                              styles.groundCardName,
+                              isSelected && styles.groundCardNameActive
+                            ]}>
+                              {aiLoc.name}
+                            </Text>
+                            <Text style={styles.groundCardType}>
+                              Public {sport} Ground{aiLoc.distance ? ` • ${aiLoc.distance}` : ''}
+                            </Text>
+                          </View>
+                          {isSelected && (
+                            <View style={styles.selectionIndicator}>
+                              <Text style={styles.selectionIndicatorText}>✓</Text>
+                            </View>
+                          )}
+                        </TouchableOpacity>
+                      );
+                    })}
+                  </View>
+                ) : (
+                  <Text style={styles.aiText}>No free public grounds found near you.</Text>
+                )}
+                
+                <View style={styles.divider} />
+
+                <Text style={styles.sectionTitle}>Private Sports Turfs (Paid / Booking Required)</Text>
+                {privateLocations.length > 0 && !isLocationInitializing && !isAiLoading && (
+                  <Text style={styles.hintText}>💡 Long press any card to view photos & pricing details</Text>
+                )}
+                {isLocationInitializing || isAiLoading ? (
+                  null
+                ) : privateLocations.length > 0 ? (
+                  <View style={styles.groundsContainer}>
+                    {privateLocations.map((aiLoc, index) => {
+                      const isSelected = location === aiLoc.name;
+                      const imageUrl = aiLoc.images && aiLoc.images.length > 0
+                        ? aiLoc.images[0]
+                        : getSportImage(sport);
+                      return (
+                        <TouchableOpacity
+                          key={index}
+                          style={[
+                            styles.groundCard,
+                            isSelected && styles.groundCardActive
+                          ]}
+                          onPress={() => {
+                            setLocation(aiLoc.name);
+                            setLocationQuery(aiLoc.name);
+                          }}
+                          onLongPress={() => handleLongPress(aiLoc)}
+                          delayLongPress={350}
+                        >
+                          <VenueImage
+                            uri={imageUrl}
+                            fallbackUri={getSportImage(sport)}
+                            style={styles.groundCardImage}
+                          />
+                          <View style={styles.groundCardDetails}>
+                            <Text style={[
+                              styles.groundCardName,
+                              isSelected && styles.groundCardNameActive
+                            ]}>
+                              {aiLoc.name}
+                            </Text>
+                            <Text style={styles.groundCardType}>
+                              Private {sport} Turf • Paid Booking{aiLoc.distance ? ` • ${aiLoc.distance}` : ''}
+                            </Text>
+                          </View>
+                          {isSelected && (
+                            <View style={styles.selectionIndicator}>
+                              <Text style={styles.selectionIndicatorText}>✓</Text>
+                            </View>
+                          )}
+                        </TouchableOpacity>
+                      );
+                    })}
+                  </View>
+                ) : (
+                  <Text style={styles.aiText}>No private booking turfs found near you.</Text>
+                )}
+                
+                {location ? (
+                  <Text style={styles.selectedLocationText}>Selected: {location}</Text>
+                ) : null}
+              </View>
+            )}
+
+            {/* Step 4: Details & Review */}
+            {currentStep === 4 && (
               <View style={styles.stepContainer}>
                 {/* Max Players */}
                 <InputField
@@ -650,7 +1119,7 @@ export function CreateGameScreen({ navigation }: Props) {
                   style={styles.backStepButton}
                 />
               )}
-              {currentStep < 3 ? (
+              {currentStep < 4 ? (
                 <PrimaryButton
                   title="Next Step"
                   variant="primary"
@@ -670,6 +1139,105 @@ export function CreateGameScreen({ navigation }: Props) {
           </ScrollView>
         </KeyboardAvoidingView>
       </SafeAreaView>
+
+      <Modal
+        visible={showImageModal}
+        transparent={true}
+        animationType="fade"
+        onRequestClose={() => setShowImageModal(false)}
+      >
+        <View style={styles.modalBackdrop}>
+          <GlassCard style={styles.modalCard}>
+            {/* Modal Header */}
+            <View style={styles.modalHeader}>
+              <View style={{ flex: 1 }}>
+                <Text style={styles.modalVenueName} numberOfLines={2}>
+                  {selectedGround?.name}
+                </Text>
+                <Text style={styles.modalVenueDistance}>
+                  {selectedGround?.distance ? `📍 ${selectedGround.distance}` : 'Distance unknown'}
+                </Text>
+              </View>
+              <TouchableOpacity
+                onPress={() => setShowImageModal(false)}
+                style={styles.modalCloseIconBtn}
+              >
+                <Text style={styles.modalCloseIcon}>✕</Text>
+              </TouchableOpacity>
+            </View>
+
+            {/* Carousel Container */}
+            <View style={styles.carouselContainer}>
+              {isModalImagesLoading ? (
+                <View style={styles.modalLoadingContainer}>
+                  <ActivityIndicator color={Colors.primary} size="large" />
+                </View>
+              ) : modalImages.length > 0 ? (
+                <View style={styles.carouselImageWrapper}>
+                  <VenueImage
+                    uri={modalImages[currentImageIndex]}
+                    fallbackUri={getSportImage(sport)}
+                    style={styles.carouselImage}
+                  />
+                  
+                  {/* Left Arrow overlay */}
+                  {modalImages.length > 1 && (
+                    <TouchableOpacity
+                      onPress={handlePrevImage}
+                      style={[styles.carouselArrowBtn, styles.carouselArrowLeft]}
+                    >
+                      <Text style={styles.carouselArrowText}>◀</Text>
+                    </TouchableOpacity>
+                  )}
+
+                  {/* Right Arrow overlay */}
+                  {modalImages.length > 1 && (
+                    <TouchableOpacity
+                      onPress={handleNextImage}
+                      style={[styles.carouselArrowBtn, styles.carouselArrowRight]}
+                    >
+                      <Text style={styles.carouselArrowText}>▶</Text>
+                    </TouchableOpacity>
+                  )}
+
+                  {/* Image Counter overlay */}
+                  <View style={styles.imageCounterBadge}>
+                    <Text style={styles.imageCounterText}>
+                      {currentImageIndex + 1} / {modalImages.length}
+                    </Text>
+                  </View>
+                </View>
+              ) : (
+                <View style={styles.modalLoadingContainer}>
+                  <Text style={styles.aiText}>No images available</Text>
+                </View>
+              )}
+            </View>
+
+            {/* Modal Footer/Actions */}
+            <View style={styles.modalFooter}>
+              <PrimaryButton
+                title="Select Ground"
+                variant="primary"
+                style={{ flex: 1 }}
+                onPress={() => {
+                  if (selectedGround) {
+                    setLocation(selectedGround.name);
+                    setLocationQuery(selectedGround.name);
+                  }
+                  setShowImageModal(false);
+                }}
+              />
+              <PrimaryButton
+                title="Close"
+                variant="outline"
+                style={{ marginLeft: 12 }}
+                onPress={() => setShowImageModal(false)}
+              />
+            </View>
+          </GlassCard>
+        </View>
+      </Modal>
     </LinearGradient>
   );
 }
@@ -1102,5 +1670,235 @@ const styles = StyleSheet.create({
     height: 40,
     borderRadius: BorderRadius.lg,
     marginTop: 8,
+  },
+  locationResultsCard: {
+    padding: 12,
+    gap: 12,
+    marginTop: 8,
+  },
+  sectionTitle: {
+    fontSize: 14,
+    fontWeight: '600',
+    color: Colors.foreground,
+  },
+  locationItem: {
+    paddingVertical: 8,
+    borderBottomWidth: 1,
+    borderBottomColor: Colors.border + '40',
+  },
+  locationItemName: {
+    fontSize: 14,
+    fontWeight: '500',
+    color: Colors.foreground,
+  },
+  locationItemAddress: {
+    fontSize: 12,
+    color: Colors.mutedForeground,
+    marginTop: 2,
+  },
+  divider: {
+    height: 1,
+    backgroundColor: Colors.border + '40',
+    marginVertical: 16,
+  },
+  groundsContainer: {
+    gap: 12,
+    marginTop: 8,
+  },
+  groundCard: {
+    backgroundColor: 'rgba(24,24,30,0.6)',
+    borderRadius: BorderRadius.md,
+    borderWidth: 1,
+    borderColor: Colors.border,
+    flexDirection: 'row',
+    alignItems: 'center',
+    padding: 8,
+    overflow: 'hidden',
+  },
+  groundCardActive: {
+    backgroundColor: Colors.primaryDim,
+    borderColor: Colors.primary,
+  },
+  groundCardImage: {
+    width: 60,
+    height: 60,
+    borderRadius: BorderRadius.sm,
+    backgroundColor: 'rgba(255,255,255,0.05)',
+  },
+  groundCardDetails: {
+    flex: 1,
+    marginLeft: 12,
+  },
+  groundCardName: {
+    fontSize: 14,
+    fontWeight: '600',
+    color: Colors.foreground,
+  },
+  groundCardNameActive: {
+    color: Colors.primary,
+  },
+  groundCardType: {
+    fontSize: 12,
+    color: Colors.mutedForeground,
+    marginTop: 2,
+  },
+  selectionIndicator: {
+    width: 24,
+    height: 24,
+    borderRadius: 12,
+    backgroundColor: Colors.primary,
+    alignItems: 'center',
+    justifyContent: 'center',
+    marginRight: 4,
+  },
+  selectionIndicatorText: {
+    color: '#000',
+    fontWeight: 'bold',
+    fontSize: 13,
+  },
+  aiText: {
+    fontSize: 13,
+    color: Colors.mutedForeground,
+    fontStyle: 'italic',
+    marginTop: 8,
+  },
+  selectedLocationText: {
+    fontSize: 13,
+    color: Colors.primary,
+    fontWeight: '600',
+    marginTop: 12,
+    textAlign: 'center',
+  },
+  modalBackdrop: {
+    flex: 1,
+    backgroundColor: 'rgba(0,0,0,0.85)',
+    justifyContent: 'center',
+    alignItems: 'center',
+    padding: Spacing.lg,
+  },
+  modalCard: {
+    width: '100%',
+    maxWidth: 400,
+    padding: Spacing.base,
+    borderRadius: BorderRadius.lg,
+  },
+  modalHeader: {
+    flexDirection: 'row',
+    alignItems: 'flex-start',
+    marginBottom: 16,
+  },
+  modalVenueName: {
+    fontSize: 18,
+    fontWeight: 'bold',
+    color: Colors.foreground,
+  },
+  modalVenueDistance: {
+    fontSize: 14,
+    color: Colors.primary,
+    fontWeight: '600',
+    marginTop: 4,
+  },
+  modalCloseIconBtn: {
+    width: 32,
+    height: 32,
+    borderRadius: 16,
+    backgroundColor: 'rgba(255,255,255,0.1)',
+    alignItems: 'center',
+    justifyContent: 'center',
+    marginLeft: 12,
+  },
+  modalCloseIcon: {
+    color: Colors.foreground,
+    fontSize: 14,
+    fontWeight: 'bold',
+  },
+  carouselContainer: {
+    width: '100%',
+    height: 250,
+    backgroundColor: 'rgba(0,0,0,0.3)',
+    borderRadius: BorderRadius.md,
+    overflow: 'hidden',
+    marginBottom: 20,
+  },
+  modalLoadingContainer: {
+    flex: 1,
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
+  carouselImageWrapper: {
+    flex: 1,
+    position: 'relative',
+    width: '100%',
+    height: '100%',
+  },
+  carouselImage: {
+    width: '100%',
+    height: '100%',
+  },
+  carouselArrowBtn: {
+    position: 'absolute',
+    top: '50%',
+    marginTop: -20,
+    width: 40,
+    height: 40,
+    borderRadius: 20,
+    backgroundColor: 'rgba(0,0,0,0.6)',
+    borderWidth: 1,
+    borderColor: 'rgba(255,255,255,0.15)',
+    alignItems: 'center',
+    justifyContent: 'center',
+    zIndex: 10,
+  },
+  carouselArrowLeft: {
+    left: 12,
+  },
+  carouselArrowRight: {
+    right: 12,
+  },
+  carouselArrowText: {
+    color: '#fff',
+    fontSize: 14,
+    fontWeight: 'bold',
+  },
+  imageCounterBadge: {
+    position: 'absolute',
+    bottom: 12,
+    alignSelf: 'center',
+    backgroundColor: 'rgba(0,0,0,0.6)',
+    paddingHorizontal: 10,
+    paddingVertical: 4,
+    borderRadius: BorderRadius.full,
+  },
+  imageCounterText: {
+    color: '#fff',
+    fontSize: 12,
+    fontWeight: '600',
+  },
+  modalFooter: {
+    flexDirection: 'row',
+    width: '100%',
+  },
+  spinnerContainer: {
+    alignItems: 'center',
+    justifyContent: 'center',
+    paddingVertical: 24,
+  },
+  spinnerSubtext: {
+    color: Colors.mutedForeground,
+    fontSize: 14,
+    marginTop: 8,
+    textAlign: 'center',
+  },
+  pickerLocked: {
+    backgroundColor: 'rgba(255, 255, 255, 0.03)',
+    borderColor: 'rgba(255, 255, 255, 0.1)',
+    opacity: 0.8,
+  },
+  hintText: {
+    fontSize: 12,
+    color: Colors.mutedForeground,
+    fontStyle: 'italic',
+    marginBottom: 10,
+    marginTop: -4,
   },
 });
