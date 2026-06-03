@@ -19,6 +19,7 @@ import { getEventById, updateEvent } from '../firebase/firestore';
 import { InputField, PrimaryButton, GlassCard, LoadingScreen } from '../components/common';
 import { Colors, BorderRadius, Spacing } from '../theme';
 import { SPORTS, SKILL_LEVELS } from '../constants';
+import { parseDateTime } from '../utils/helpers';
 import type { SportEvent } from '../utils/types';
 
 type Props = {
@@ -30,7 +31,7 @@ function validateFutureDateTime(dateStr: string, timeStr: string): string | null
   if (!dateStr.trim()) return 'Date is required';
   if (!timeStr.trim()) return 'Time is required';
 
-  const combined = new Date(`${dateStr} ${timeStr}`);
+  const combined = parseDateTime(dateStr, timeStr);
   if (isNaN(combined.getTime())) {
     return 'Invalid date or time format';
   }
@@ -107,7 +108,7 @@ export function EditGameScreen({ navigation, route }: Props) {
         title: title.trim() || `${sport} Game`,
         sport,
         location: { name: location.trim() },
-        date: new Date(`${date} ${time}`),
+        date: parseDateTime(date, time),
         time,
         skillLevel,
         maxPlayers: newMax,

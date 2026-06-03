@@ -22,7 +22,27 @@ export function formatDate(date: Date): string {
 }
 
 /**
+ * Parses a date string (YYYY-MM-DD) and a time string (h:mm AM/PM) into a Date object safely.
+ */
+export function parseDateTime(dateStr: string, timeStr: string): Date {
+  const [year, month, day] = dateStr.split('-').map(Number);
+  
+  const [timePart, modifier] = timeStr.split(' ');
+  let [hours, minutes] = timePart.split(':').map(Number);
+  
+  if (hours === 12) {
+    hours = 0;
+  }
+  if (modifier === 'PM' || modifier === 'pm') {
+    hours += 12;
+  }
+  
+  return new Date(year, month - 1, day, hours, minutes);
+}
+
+/**
  * Format a timestamp to relative time (e.g. "2 hours ago")
+
  */
 export function timeAgo(date: Date): string {
   const now = new Date();
@@ -72,6 +92,28 @@ export function calculateDistance(
   const c = 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a));
   const distance = R * c;
   return `${distance.toFixed(1)} mi`;
+}
+
+/**
+ * Calculate distance between two coordinates in miles as a number
+ */
+export function calculateDistanceNum(
+  lat1: number,
+  lon1: number,
+  lat2: number,
+  lon2: number
+): number {
+  const R = 3959; // Earth radius in miles
+  const dLat = ((lat2 - lat1) * Math.PI) / 180;
+  const dLon = ((lon2 - lon1) * Math.PI) / 180;
+  const a =
+    Math.sin(dLat / 2) * Math.sin(dLat / 2) +
+    Math.cos((lat1 * Math.PI) / 180) *
+      Math.cos((lat2 * Math.PI) / 180) *
+      Math.sin(dLon / 2) *
+      Math.sin(dLon / 2);
+  const c = 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a));
+  return R * c;
 }
 
 /**
