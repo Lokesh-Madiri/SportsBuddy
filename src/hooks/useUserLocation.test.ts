@@ -23,6 +23,7 @@ jest.mock('../services/locationService', () => ({
     requestPermissions: jest.fn(),
     getCurrentLocation: jest.fn(),
     reverseGeocode: jest.fn(),
+    getLocationAddress: jest.fn(),
   },
 }));
 
@@ -108,7 +109,7 @@ describe('useUserLocation hook properties', () => {
               latitude: coords.lat,
               longitude: coords.lon,
             });
-            (locationService.reverseGeocode as jest.Mock).mockResolvedValue({
+            (locationService.getLocationAddress as jest.Mock).mockResolvedValue({
               city: 'NYC',
               country: 'USA',
             });
@@ -178,7 +179,7 @@ describe('useUserLocation hook properties', () => {
 
           (locationService.requestPermissions as jest.Mock).mockResolvedValue(true);
           (locationService.getCurrentLocation as jest.Mock).mockResolvedValue(newLocCoords);
-          (locationService.reverseGeocode as jest.Mock).mockResolvedValue({
+          (locationService.getLocationAddress as jest.Mock).mockResolvedValue({
             city: 'NYC',
             country: 'USA',
           });

@@ -61,13 +61,15 @@ interface VenueImageProps {
 }
 
 const VenueImage = ({ uri, fallbackUri, style }: VenueImageProps) => {
+  const [prevUri, setPrevUri] = useState(uri);
   const [currentUri, setCurrentUri] = useState(uri);
   const [hasError, setHasError] = useState(false);
 
-  useEffect(() => {
+  if (uri !== prevUri) {
+    setPrevUri(uri);
     setCurrentUri(uri);
     setHasError(false);
-  }, [uri]);
+  }
 
   return (
     <Image
@@ -304,7 +306,7 @@ export function CreateGameScreen({ navigation }: Props) {
       }, 600);
       return () => clearTimeout(delay);
     } else {
-      setLocationResults([]);
+      setTimeout(() => setLocationResults([]), 0);
     }
   }, [locationQuery]);
 
@@ -917,7 +919,7 @@ export function CreateGameScreen({ navigation }: Props) {
                     <Text style={styles.spinnerSubtext}>Searching community grounds & private turfs...</Text>
                   </View>
                 ) : aiError ? (
-                  <Text style={[styles.aiText, { color: '#ef4444', marginTop: 16 }]}>{aiError}</Text>
+                  <Text style={[styles.aiStatusText, { color: '#ef4444', marginTop: 16 }]}>{aiError}</Text>
                 ) : publicLocations.length > 0 ? (
                   <View style={styles.groundsContainer}>
                     {publicLocations.map((aiLoc, index) => {
@@ -965,7 +967,7 @@ export function CreateGameScreen({ navigation }: Props) {
                     })}
                   </View>
                 ) : (
-                  <Text style={styles.aiText}>No free public grounds found near you.</Text>
+                  <Text style={styles.aiStatusText}>No free public grounds found near you.</Text>
                 )}
                 
                 <View style={styles.divider} />
@@ -1023,7 +1025,7 @@ export function CreateGameScreen({ navigation }: Props) {
                     })}
                   </View>
                 ) : (
-                  <Text style={styles.aiText}>No private booking turfs found near you.</Text>
+                  <Text style={styles.aiStatusText}>No private booking turfs found near you.</Text>
                 )}
                 
                 {location ? (
@@ -1209,7 +1211,7 @@ export function CreateGameScreen({ navigation }: Props) {
                 </View>
               ) : (
                 <View style={styles.modalLoadingContainer}>
-                  <Text style={styles.aiText}>No images available</Text>
+                  <Text style={styles.aiStatusText}>No images available</Text>
                 </View>
               )}
             </View>
@@ -1756,7 +1758,7 @@ const styles = StyleSheet.create({
     fontWeight: 'bold',
     fontSize: 13,
   },
-  aiText: {
+  aiStatusText: {
     fontSize: 13,
     color: Colors.mutedForeground,
     fontStyle: 'italic',
