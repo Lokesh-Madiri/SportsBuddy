@@ -174,6 +174,7 @@ export interface SportEvent {
   status: 'upcoming' | 'ongoing' | 'completed' | 'cancelled';
   chatId?: string;
   distance?: string;
+  distanceMiles?: number | null;
   createdAt: Date;
   updatedAt: Date;
 }

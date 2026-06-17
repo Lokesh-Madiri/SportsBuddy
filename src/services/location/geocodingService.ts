@@ -13,8 +13,9 @@ export const geocodingService = {
       const results = await Location.reverseGeocodeAsync({ latitude, longitude });
       const first = results[0];
       if (first) {
+        const city = first.city || first.subregion || first.district || undefined;
         const address: LocationAddress = {
-          city: first.city || undefined,
+          city,
           region: first.region || undefined,
           country: first.country || undefined,
           street: first.street || undefined,
@@ -38,7 +39,7 @@ export const geocodingService = {
         const data = await response.json();
         if (data && data.address) {
           const addr = data.address;
-          const city = addr.city || addr.town || addr.village || addr.suburb || addr.city_district;
+          const city = addr.city || addr.town || addr.village || addr.suburb || addr.city_district || addr.county || addr.state_district;
           const address: LocationAddress = {
             city: city || undefined,
             region: addr.state || undefined,
@@ -76,5 +77,6 @@ export const geocodingService = {
 
 function formatAddress(address: Location.LocationGeocodedAddress): string {
   const street = [address.streetNumber, address.street].filter(Boolean).join(' ');
-  return [street, address.city, address.region, address.country].filter(Boolean).join(', ') || 'Unknown location';
+  const city = address.city || address.subregion || address.district;
+  return [street, city, address.region, address.country].filter(Boolean).join(', ') || 'Unknown location';
 }

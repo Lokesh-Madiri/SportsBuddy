@@ -133,7 +133,7 @@ export const aiService = {
         .map(line => line.trim())
         .filter(Boolean);
       
-      const parsedVenues = lines.map(line => {
+      const parsedVenues = lines.map((line): { name: string; lat: number | undefined; lon: number | undefined; type: 'public' | 'private' } | null => {
         const parts = line.split('|');
         if (parts.length >= 4) {
           const name = parts[0].replace(/^-\s*/, '').trim();
@@ -156,7 +156,7 @@ export const aiService = {
           return { name: cleanName, lat: undefined, lon: undefined, type: 'public' as const };
         }
         return null;
-      }).filter((v): v is { name: string; lat?: number; lon?: number; type: 'public' | 'private' } => v !== null);
+      }).filter((v): v is { name: string; lat: number | undefined; lon: number | undefined; type: 'public' | 'private' } => v !== null);
 
       console.log(`[AIService Logger] AI returned ${parsedVenues.length} location items:`, parsedVenues);
 

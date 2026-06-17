@@ -41,7 +41,7 @@ export function useUserLocation() {
         let city: string | undefined;
         let country: string | undefined;
         try {
-          const geocode = await locationService.reverseGeocode(coords.latitude, coords.longitude);
+          const geocode = await locationService.getLocationAddress(coords);
           if (geocode) {
             city = geocode.city;
             country = geocode.country;
