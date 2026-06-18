@@ -12,6 +12,7 @@ import { LinearGradient } from 'expo-linear-gradient';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { NativeStackNavigationProp } from '@react-navigation/native-stack';
 import { useNavigation } from '@react-navigation/native';
+import { Ionicons } from '@expo/vector-icons';
 import { HomeStackParamList } from '../utils/types';
 import { neonShadow } from '../utils/platform';
 import { useAuthStore } from '../store/authStore';
@@ -86,12 +87,20 @@ export function HomeScreen({ navigation }: Props) {
               <Text style={styles.greeting}>{greeting()}</Text>
               <Text style={styles.headerTitle}>Find Your Game</Text>
             </View>
-            <TouchableOpacity
-              onPress={() => tabNavigation.navigate('Profile')}
-              style={styles.avatarButton}
-            >
-              <Avatar name={user?.displayName || 'User'} size={44} />
-            </TouchableOpacity>
+            <View style={styles.headerActions}>
+              <TouchableOpacity
+                onPress={() => navigation.navigate('Notifications')}
+                style={styles.iconButton}
+              >
+                <Ionicons name="notifications-outline" size={20} color={Colors.primary} />
+              </TouchableOpacity>
+              <TouchableOpacity
+                onPress={() => tabNavigation.navigate('Profile')}
+                style={styles.avatarButton}
+              >
+                <Avatar name={user?.displayName || 'User'} size={44} />
+              </TouchableOpacity>
+            </View>
           </View>
 
           {/* Search */}
@@ -326,6 +335,21 @@ const styles = StyleSheet.create({
     borderRadius: BorderRadius.full,
     borderWidth: 1,
     borderColor: Colors.border,
+  },
+  headerActions: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 10,
+  },
+  iconButton: {
+    width: 42,
+    height: 42,
+    borderRadius: 21,
+    backgroundColor: Colors.secondary,
+    borderWidth: 1,
+    borderColor: Colors.border,
+    alignItems: 'center',
+    justifyContent: 'center',
   },
   searchContainer: {
     flexDirection: 'row',

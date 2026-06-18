@@ -97,8 +97,11 @@ export function ProfileScreen({ navigation }: Props) {
       <SafeAreaView style={styles.safeArea} edges={['top']}>
         <View style={styles.header}>
           <Text style={styles.headerTitle}>Profile</Text>
-          <TouchableOpacity style={styles.settingsButton}>
-            <Ionicons name="settings-outline" size={20} color={Colors.mutedForeground} />
+          <TouchableOpacity
+            style={styles.settingsButton}
+            onPress={() => navigation.navigate('Notifications')}
+          >
+            <Ionicons name="notifications-outline" size={20} color={Colors.primary} />
           </TouchableOpacity>
         </View>
 

@@ -16,6 +16,7 @@ import { neonShadow } from '../utils/platform';
 import { subscribeToUserChats } from '../firebase/firestore';
 import { useChatStore } from '../store/chatStore';
 import { useAuthStore } from '../store/authStore';
+import { notificationService } from '../services/notifications';
 import { timeAgo } from '../utils/helpers';
 import type { Chat } from '../utils/types';
 import { SPORTS } from '../constants';
@@ -33,10 +34,31 @@ function sportEmoji(eventTitle: string): string {
 export function ChatListScreen({ navigation }: Props) {
   const { user } = useAuthStore();
   const { chats, setChats, getTotalUnread } = useChatStore();
+  const lastMessageIds = React.useRef<Record<string, string>>({});
 
   useEffect(() => {
     if (!user?.uid) return;
     const unsubscribe = subscribeToUserChats(user.uid, (liveChats) => {
+      liveChats.forEach((chat) => {
+        const message = chat.lastMessage;
+        const previousId = lastMessageIds.current[chat.id];
+        if (
+          message?.id &&
+          previousId &&
+          previousId !== message.id &&
+          message.senderId !== user.uid
+        ) {
+          notificationService.notifyChatMessage({
+            chatId: chat.id,
+            eventTitle: chat.eventTitle,
+            senderName: message.senderName,
+            messagePreview: message.text,
+          });
+        }
+        if (message?.id) {
+          lastMessageIds.current[chat.id] = message.id;
+        }
+      });
       setChats(liveChats);
     });
     return unsubscribe;

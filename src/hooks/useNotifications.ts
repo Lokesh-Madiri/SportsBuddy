@@ -1,49 +1,99 @@
 import { useEffect, useRef } from 'react';
-import * as Notifications from 'expo-notifications';
-import { notificationService } from '../services/notificationService';
+
+import { notificationService } from '../services/notifications';
+
 import { useAuthStore } from '../store/authStore';
-import { updateUserProfile } from '../firebase/firestore';
+
+type EventSubscription = import('expo-notifications').EventSubscription;
 
 export function useNotifications() {
   const { user } = useAuthStore();
-  const notificationListener = useRef<Notifications.EventSubscription | null>(null);
-  const responseListener = useRef<Notifications.EventSubscription | null>(null);
+
+  const notificationListener =
+    useRef<EventSubscription | null>(
+      null
+    );
+
+  const responseListener =
+    useRef<EventSubscription | null>(
+      null
+    );
 
   useEffect(() => {
-    // Register for push notifications
-    notificationService.registerForPushNotifications().then(async (token) => {
-      if (token && user?.uid) {
-        // Save FCM token to user profile
-        try {
-          await updateUserProfile(user.uid, { fcmToken: token });
-        } catch {
-          // Non-critical
-        }
+    let mounted = true;
+
+    // Listen for notifications received
+    notificationService.addNotificationListener(
+      (notification) => {
+        console.log(
+          'Notification received:',
+          notification.request.content.title
+        );
+      }
+    ).then(sub => {
+      if (mounted) {
+        notificationListener.current = sub;
       }
     });
 
-    // Listen for notifications received while app is open
-    notificationListener.current = notificationService.addNotificationListener(
-      (notification) => {
-        console.log('Notification received:', notification.request.content.title);
-      }
-    );
+    // Listen for notification taps
+    notificationService.addResponseListener(
+      (response) => {
+        const data =
+          response.notification.request.content
+            .data;
 
-    // Listen for user tapping a notification
-    responseListener.current = notificationService.addResponseListener((response) => {
-      const data = response.notification.request.content.data;
-      console.log('Notification tapped:', data);
-      // TODO: Navigate to relevant screen based on data.type
+        console.log(
+          'Notification tapped:',
+          data
+        );
+
+        // TODO:
+        // Navigate based on notification type
+      }
+    ).then(sub => {
+      if (mounted) {
+        responseListener.current = sub;
+      }
     });
 
     return () => {
+      mounted = false;
       notificationListener.current?.remove();
+
       responseListener.current?.remove();
     };
   }, [user?.uid]);
 
   return {
-    scheduleReminder: notificationService.scheduleEventReminder.bind(notificationService),
-    sendLocal: notificationService.sendLocalNotification.bind(notificationService),
+    scheduleReminder:
+      notificationService.scheduleEventReminder.bind(
+        notificationService
+      ),
+
+    scheduleMatchReminder:
+      notificationService.scheduleMatchReminder.bind(
+        notificationService
+      ),
+
+    sendLocal:
+      notificationService.sendLocalNotification.bind(
+        notificationService
+      ),
+
+    notifyChatMessage:
+      notificationService.notifyChatMessage.bind(
+        notificationService
+      ),
+
+    notifyJoinRequest:
+      notificationService.notifyJoinRequest.bind(
+        notificationService
+      ),
+
+    notifyEventCancelled:
+      notificationService.notifyEventCancelled.bind(
+        notificationService
+      ),
   };
 }

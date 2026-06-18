@@ -16,6 +16,7 @@ import { RouteProp } from '@react-navigation/native';
 import { HomeStackParamList } from '../utils/types';
 import { useAuthStore } from '../store/authStore';
 import { getEventById, updateEvent } from '../firebase/firestore';
+import { notificationService } from '../services/notifications';
 import { InputField, PrimaryButton, GlassCard, LoadingScreen } from '../components/common';
 import { Colors, BorderRadius, Spacing } from '../theme';
 import { SPORTS, SKILL_LEVELS } from '../constants';
@@ -103,15 +104,29 @@ export function EditGameScreen({ navigation, route }: Props) {
 
     setSaving(true);
     try {
+      const updatedDate = parseDateTime(date, time);
       await updateEvent(eventId, {
         title: title.trim() || `${sport} Game`,
         sport,
         location: { name: location.trim() },
+<<<<<<< Updated upstream
         date: new Date(`${date} ${time}`),
+=======
+        date: updatedDate,
+>>>>>>> Stashed changes
         time,
         skillLevel,
         maxPlayers: newMax,
         description: description.trim(),
+      });
+      await notificationService.cancelEventReminders(eventId);
+      await notificationService.scheduleAutomaticEventReminders({
+        eventId,
+        title: title.trim() || `${sport} Game`,
+        sport,
+        date: updatedDate,
+        time,
+        location: { name: location.trim() },
       });
       Alert.alert('Saved!', 'Event has been updated.', [
         { text: 'OK', onPress: () => navigation.goBack() },

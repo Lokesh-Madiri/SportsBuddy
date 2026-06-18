@@ -87,6 +87,15 @@ export function CreateGameScreen({ navigation }: Props) {
         status: 'upcoming',
       });
 
+      await notificationService.scheduleAutomaticEventReminders({
+        eventId,
+        title: `${sport} Game`,
+        sport,
+        date: combined,
+        time,
+        location: { name: location.trim() },
+      });
+
       Alert.alert('Game Created!', 'Your game has been published.', [
         { text: 'View Game', onPress: () => navigation.replace('MatchDetails', { eventId }) },
         { text: 'Go Home', onPress: () => navigation.popToTop() },

@@ -30,6 +30,12 @@ expo-env.d.ts
 *.pem
 
 # =========================
+# Firebase / Google Services (confidential)
+# =========================
+google-services.json
+GoogleService-Info.plist
+
+# =========================
 # Environment variables
 # =========================
 .env
