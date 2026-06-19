@@ -29,11 +29,6 @@ expo-env.d.ts
 *.mobileprovision
 *.pem
 
-# =========================
-# Firebase / Google Services (confidential)
-# =========================
-google-services.json
-GoogleService-Info.plist
 
 # =========================
 # Environment variables
