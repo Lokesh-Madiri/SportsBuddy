@@ -23,7 +23,7 @@
         "backgroundColor": "#0a0a0a"
       },
       "package": "com.nsky26.sportsbuddy",
-      "googleServicesFile":"${GOOGLE_SERVICES_JSON}",
+      "googleServicesFile":"$GOOGLE_SERVICES_JSON",
       "permissions": [
         "ACCESS_FINE_LOCATION",
         "ACCESS_COARSE_LOCATION",
