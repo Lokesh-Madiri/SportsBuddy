@@ -33,7 +33,7 @@ export function HomeScreen({ navigation }: Props) {
   const { user } = useAuthStore();
   // useNavigation gives access to the parent tab navigator for cross-tab navigation
   const tabNavigation = useNavigation<any>();
-  const { setEvents, getFilteredEvents, searchQuery, setSearchQuery } = useEventsStore();
+  const { setEvents, getFilteredEvents, searchQuery, setSearchQuery, userLocation } = useEventsStore();
   const [aiPicks, setAiPicks] = useState<AIRecommendation[]>([]);
   const [refreshing, setRefreshing] = useState(false);
   const [selectedSport, setSelectedSport] = useState<string | null>(null);
@@ -66,7 +66,10 @@ export function HomeScreen({ navigation }: Props) {
   const displayEvents = selectedSport
     ? filteredEvents.filter((e) => e.sport === selectedSport)
     : filteredEvents;
-  const eventsToShow = displayEvents.length > 0 ? displayEvents : MOCK_EVENTS;
+  const nearbyEvents = userLocation
+    ? displayEvents.filter((e) => e.distanceMiles === null || e.distanceMiles === undefined || e.distanceMiles <= 25)
+    : displayEvents;
+  const eventsToShow = nearbyEvents.length > 0 ? nearbyEvents : MOCK_EVENTS;
 
   return (
     <LinearGradient colors={['#0a0a0a', '#0f0f14', '#0a0a0a']} style={styles.container}>

@@ -88,7 +88,7 @@ export const locationService = {
 
     try {
       const location = await Location.getCurrentPositionAsync({
-        accuracy: Location.Accuracy.Balanced,
+        accuracy: Location.Accuracy.Highest,
       });
       const coordinates = toCoordinates(location);
       setCachedLocation(coordinates);
@@ -158,6 +158,26 @@ export const locationService = {
 
   async getNearbySportsGrounds(options: NearbyQueryOptions) {
     return nearbyService.getNearbySportsGrounds(options);
+  },
+
+  async getNearbyVenues(
+    latitude: number,
+    longitude: number,
+    sport: string,
+    radiusMiles: number
+  ): Promise<{ name: string; distanceMiles: number; sports: string[] }[]> {
+    const METERS_PER_MILE = 1609.344;
+    const options = {
+      center: { latitude, longitude },
+      sports: [sport],
+      radiusMeters: radiusMiles * METERS_PER_MILE,
+    };
+    const grounds = await nearbyService.getNearbySportsGrounds(options);
+    return grounds.map((g) => ({
+      name: g.name,
+      distanceMiles: g.distance.miles,
+      sports: g.sports,
+    }));
   },
 
   suggestLocalActivities: nearbyService.suggestLocalActivities.bind(nearbyService),

@@ -9,21 +9,56 @@ export const geocodingService = {
     const cached = geocodeCache.get(cacheKey);
     if (cached) return cached;
 
-    const results = await Location.reverseGeocodeAsync({ latitude, longitude });
-    const first = results[0];
-    const address: LocationAddress = first
-      ? {
-          city: first.city || undefined,
+    try {
+      const results = await Location.reverseGeocodeAsync({ latitude, longitude });
+      const first = results[0];
+      if (first) {
+        const city = first.city || first.subregion || first.district || undefined;
+        const address: LocationAddress = {
+          city,
           region: first.region || undefined,
           country: first.country || undefined,
           street: first.street || undefined,
           postalCode: first.postalCode || undefined,
           formattedAddress: formatAddress(first),
+        };
+        geocodeCache.set(cacheKey, address);
+        return address;
+      }
+    } catch (error) {
+      console.log('[GeocodingService Logger] ExpoLocation.reverseGeocodeAsync failed/timed out. Falling back to HTTP Nominatim...', error);
+      try {
+        const response = await fetch(
+          `https://nominatim.openstreetmap.org/reverse?lat=${latitude}&lon=${longitude}&format=json`,
+          {
+            headers: {
+              'User-Agent': 'SportsBuddy/1.0',
+            },
+          }
+        );
+        const data = await response.json();
+        if (data && data.address) {
+          const addr = data.address;
+          const city = addr.city || addr.town || addr.village || addr.suburb || addr.city_district || addr.county || addr.state_district;
+          const address: LocationAddress = {
+            city: city || undefined,
+            region: addr.state || undefined,
+            country: addr.country || undefined,
+            street: addr.road || undefined,
+            postalCode: addr.postcode || undefined,
+            formattedAddress: data.display_name || 'Unknown location',
+          };
+          geocodeCache.set(cacheKey, address);
+          return address;
         }
-      : { formattedAddress: 'Unknown location' };
+      } catch (nominatimError) {
+        console.error('[GeocodingService Logger] Nominatim fallback also failed:', nominatimError);
+      }
+    }
 
-    geocodeCache.set(cacheKey, address);
-    return address;
+    const fallbackAddress: LocationAddress = { formattedAddress: 'Unknown location' };
+    geocodeCache.set(cacheKey, fallbackAddress);
+    return fallbackAddress;
   },
 
   async getCity(coordinates: Coordinates): Promise<string | undefined> {
@@ -42,5 +77,6 @@ export const geocodingService = {
 
 function formatAddress(address: Location.LocationGeocodedAddress): string {
   const street = [address.streetNumber, address.street].filter(Boolean).join(' ');
-  return [street, address.city, address.region, address.country].filter(Boolean).join(', ') || 'Unknown location';
+  const city = address.city || address.subregion || address.district;
+  return [street, city, address.region, address.country].filter(Boolean).join(', ') || 'Unknown location';
 }

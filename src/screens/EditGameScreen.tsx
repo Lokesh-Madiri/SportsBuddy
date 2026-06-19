@@ -104,7 +104,7 @@ export function EditGameScreen({ navigation, route }: Props) {
 
     setSaving(true);
     try {
-      const updatedDate = new Date(`${date} ${time}`);
+      const updatedDate = parseDateTime(date, time);
       await updateEvent(eventId, {
         title: title.trim() || `${sport} Game`,
         sport,
