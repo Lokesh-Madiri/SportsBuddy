@@ -104,16 +104,12 @@ export function EditGameScreen({ navigation, route }: Props) {
 
     setSaving(true);
     try {
-      const updatedDate = parseDateTime(date, time);
+      const updatedDate = new Date(`${date} ${time}`);
       await updateEvent(eventId, {
         title: title.trim() || `${sport} Game`,
         sport,
         location: { name: location.trim() },
-<<<<<<< Updated upstream
-        date: new Date(`${date} ${time}`),
-=======
         date: updatedDate,
->>>>>>> Stashed changes
         time,
         skillLevel,
         maxPlayers: newMax,
