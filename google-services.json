@@ -12,7 +12,16 @@
           "package_name": "com.nsky26.sportsbuddy"
         }
       },
-      "oauth_client": [],
+      "oauth_client": [
+        {
+          "client_id": "720154158779-ncuq63cqsc5locfuqfts4cq65b9bkuso.apps.googleusercontent.com",
+          "client_type": 1,
+          "android_info": {
+            "package_name": "com.nsky26.sportsbuddy",
+            "certificate_hash": "389a980e88d5546b80b1966156304b2dfec9b417"
+          }
+        }
+      ],
       "api_key": [
         {
           "current_key": "AIzaSyDCHqG2K4eNjctLXgxTOfc-ie5f8j6-Wcw"
