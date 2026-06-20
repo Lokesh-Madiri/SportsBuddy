@@ -254,28 +254,57 @@ export const notificationService = {
 
   async notifyNearbyPlayersOfNewGame(event: SportEvent, center: Coordinates): Promise<void> {
     try {
-      // 1. Get nearby users (radius 25km, limit 100) interested in this sport
-      const nearbyUsers = await locationService.getNearbyUsers({
+      // 1. Get all nearby users (radius 25km, limit 100) in the region
+      const allNearbyUsers = await locationService.getNearbyUsers({
         center,
         radiusMeters: 25000,
         limitCount: 100,
-        sports: [event.sport],
       });
 
-      if (nearbyUsers.length === 0) {
+      console.log(`[NotificationService] Total nearby players found in region: ${allNearbyUsers.length}`);
+
+      const targetSportLower = event.sport.toLowerCase();
+      const interestedUsers: typeof allNearbyUsers = [];
+      const skippedUsers: { displayName: string; reason: string; distance: number }[] = [];
+
+      for (const u of allNearbyUsers) {
+        const hasInterest = u.sports?.some((s) => s.toLowerCase() === targetSportLower);
+        const distanceMiles = u.distance.miles;
+
+        if (hasInterest) {
+          interestedUsers.push(u);
+          console.log(
+            `[NotificationService] Player "${u.displayName || 'Unknown Player'}" is interested in ${event.sport}. Staging for notification. (Distance: ${distanceMiles.toFixed(2)} miles)`
+          );
+        } else {
+          const interests = u.sports && u.sports.length > 0 ? u.sports.join(', ') : 'none';
+          const reason = `Not interested in ${event.sport} (Interests: ${interests})`;
+          skippedUsers.push({ displayName: u.displayName || 'Unknown Player', reason, distance: distanceMiles });
+          console.log(
+            `[NotificationService] Player "${u.displayName || 'Unknown Player'}" skipped. Reason: ${reason} (Distance: ${distanceMiles.toFixed(2)} miles)`
+          );
+        }
+      }
+
+      console.log(`[NotificationService] Notification Summary:`);
+      console.log(`  - Total players in range: ${allNearbyUsers.length}`);
+      console.log(`  - Total interested (to notify): ${interestedUsers.length}`);
+      console.log(`  - Total skipped: ${skippedUsers.length}`);
+
+      if (interestedUsers.length === 0) {
         console.log('[NotificationService] No nearby players interested in', event.sport);
         return;
       }
 
       // 2. Batch users by distance brackets (e.g. 0-2 miles, 2-5 miles, 5-10 miles, 10+ miles)
-      const brackets: { min: number; max: number; users: typeof nearbyUsers }[] = [
+      const brackets: { min: number; max: number; users: typeof interestedUsers }[] = [
         { min: 0, max: 2, users: [] },
         { min: 2, max: 5, users: [] },
         { min: 5, max: 10, users: [] },
         { min: 10, max: 99999, users: [] },
       ];
 
-      for (const u of nearbyUsers) {
+      for (const u of interestedUsers) {
         const miles = u.distance.miles;
         const bracket = brackets.find((b) => miles >= b.min && miles < b.max);
         if (bracket) bracket.users.push(u);

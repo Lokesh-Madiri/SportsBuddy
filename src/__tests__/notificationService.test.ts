@@ -84,18 +84,17 @@ describe('NotificationService & Proximity Batching', () => {
         center: mockCenter,
         radiusMeters: 25000,
         limitCount: 100,
-        sports: ['Soccer'],
       });
       expect(console.log).toHaveBeenCalledWith('[NotificationService] No nearby players interested in', 'Soccer');
     });
 
     test('batches nearby users by distance and processes them sequentially', async () => {
-      // Mock 4 players in different distance brackets
+      // Mock 4 players: 3 interested in Soccer, 1 interested in Basketball (skipped)
       const mockUsers = [
-        { uid: 'u1', displayName: 'Player Close', distance: { miles: 1.0 } },
-        { uid: 'u2', displayName: 'Player Mid', distance: { miles: 3.5 } },
-        { uid: 'u3', displayName: 'Player Far', distance: { miles: 7.2 } },
-        { uid: 'u4', displayName: 'Player Very Far', distance: { miles: 15.0 } },
+        { uid: 'u1', displayName: 'Player Close', distance: { miles: 1.0 }, sports: ['Soccer'] },
+        { uid: 'u2', displayName: 'Player Mid', distance: { miles: 3.5 }, sports: ['soccer'] },
+        { uid: 'u3', displayName: 'Player Far', distance: { miles: 7.2 }, sports: ['Basketball'] },
+        { uid: 'u4', displayName: 'Player Very Far', distance: { miles: 15.0 }, sports: ['Soccer'] },
       ];
       
       (locationService.getNearbyUsers as jest.Mock).mockResolvedValueOnce(mockUsers);
@@ -103,7 +102,24 @@ describe('NotificationService & Proximity Batching', () => {
       const notifyPromise = notificationService.notifyNearbyPlayersOfNewGame(mockEvent, mockCenter);
       await notifyPromise;
 
-      // Verify that all 4 players were notified
+      // Verify overall summary logs
+      expect(console.log).toHaveBeenCalledWith(
+        expect.stringContaining('Total nearby players found in region: 4')
+      );
+      expect(console.log).toHaveBeenCalledWith(
+        expect.stringContaining('Player "Player Far" skipped. Reason: Not interested in Soccer (Interests: Basketball)')
+      );
+      expect(console.log).toHaveBeenCalledWith(
+        expect.stringContaining('Player "Player Close" is interested in Soccer')
+      );
+      expect(console.log).toHaveBeenCalledWith(
+        expect.stringContaining('Total interested (to notify): 3')
+      );
+      expect(console.log).toHaveBeenCalledWith(
+        expect.stringContaining('Total skipped: 1')
+      );
+
+      // Verify that the 3 interested players were notified in batches
       expect(console.log).toHaveBeenCalledWith(
         expect.stringContaining('Sending notification batch 1')
       );
@@ -112,9 +128,6 @@ describe('NotificationService & Proximity Batching', () => {
       );
       expect(console.log).toHaveBeenCalledWith(
         expect.stringContaining('Notifying user Player Mid')
-      );
-      expect(console.log).toHaveBeenCalledWith(
-        expect.stringContaining('Notifying user Player Far')
       );
       expect(console.log).toHaveBeenCalledWith(
         expect.stringContaining('Notifying user Player Very Far')
