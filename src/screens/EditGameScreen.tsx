@@ -16,10 +16,10 @@ import { RouteProp } from '@react-navigation/native';
 import { HomeStackParamList } from '../utils/types';
 import { useAuthStore } from '../store/authStore';
 import { getEventById, updateEvent } from '../firebase/firestore';
+import { notificationService } from '../services/notifications';
 import { InputField, PrimaryButton, GlassCard, LoadingScreen } from '../components/common';
 import { Colors, BorderRadius, Spacing } from '../theme';
 import { SPORTS, SKILL_LEVELS } from '../constants';
-import { parseDateTime } from '../utils/helpers';
 import type { SportEvent } from '../utils/types';
 
 type Props = {
@@ -31,7 +31,7 @@ function validateFutureDateTime(dateStr: string, timeStr: string): string | null
   if (!dateStr.trim()) return 'Date is required';
   if (!timeStr.trim()) return 'Time is required';
 
-  const combined = parseDateTime(dateStr, timeStr);
+  const combined = new Date(`${dateStr} ${timeStr}`);
   if (isNaN(combined.getTime())) {
     return 'Invalid date or time format';
   }
@@ -104,15 +104,25 @@ export function EditGameScreen({ navigation, route }: Props) {
 
     setSaving(true);
     try {
+      const updatedDate = parseDateTime(date, time);
       await updateEvent(eventId, {
         title: title.trim() || `${sport} Game`,
         sport,
         location: { name: location.trim() },
-        date: parseDateTime(date, time),
+        date: updatedDate,
         time,
         skillLevel,
         maxPlayers: newMax,
         description: description.trim(),
+      });
+      await notificationService.cancelEventReminders(eventId);
+      await notificationService.scheduleAutomaticEventReminders({
+        eventId,
+        title: title.trim() || `${sport} Game`,
+        sport,
+        date: updatedDate,
+        time,
+        location: { name: location.trim() },
       });
       Alert.alert('Saved!', 'Event has been updated.', [
         { text: 'OK', onPress: () => navigation.goBack() },

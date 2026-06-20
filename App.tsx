@@ -5,6 +5,13 @@ import { GestureHandlerRootView } from 'react-native-gesture-handler';
 import { SafeAreaProvider } from 'react-native-safe-area-context';
 import { AuthProvider } from './src/context/AuthContext';
 import { AppNavigator } from './src/navigation/AppNavigator';
+import { useNotifications } from './src/hooks/useNotifications';
+
+function AppShell() {
+  useNotifications();
+
+  return <AppNavigator />;
+}
 
 export default function App() {
   return (
@@ -12,7 +19,7 @@ export default function App() {
       <SafeAreaProvider>
         <AuthProvider>
           <StatusBar style="light" />
-          <AppNavigator />
+          <AppShell />
         </AuthProvider>
       </SafeAreaProvider>
     </GestureHandlerRootView>

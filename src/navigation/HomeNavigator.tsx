@@ -10,6 +10,7 @@ import { PostMatchRatingScreen } from '../screens/PostMatchRatingScreen';
 import { AllEventsScreen } from '../screens/AllEventsScreen';
 import { DiscoverScreen } from '../screens/DiscoverScreen';
 import { LeaderboardScreen } from '../screens/LeaderboardScreen';
+import { NotificationCenterScreen } from '../screens/NotificationCenterScreen';
 
 const Stack = createNativeStackNavigator<HomeStackParamList>();
 
@@ -31,6 +32,7 @@ export function HomeNavigator() {
       <Stack.Screen name="AllEvents" component={AllEventsScreen} />
       <Stack.Screen name="AllPlayers" component={DiscoverScreen} />
       <Stack.Screen name="Leaderboard" component={LeaderboardScreen} />
+      <Stack.Screen name="Notifications" component={NotificationCenterScreen} />
     </Stack.Navigator>
   );
 }

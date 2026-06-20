@@ -24,6 +24,7 @@ import {
   completeEvent,
   ensureChat,
 } from '../firebase/firestore';
+import { notificationService } from '../services/notifications';
 import { GlassCard, Avatar, Badge, PrimaryButton, LoadingScreen } from '../components/common';
 import { Colors, BorderRadius, Spacing } from '../theme';
 import { formatDate } from '../utils/helpers';
@@ -115,6 +116,20 @@ export function MatchDetailsScreen({ navigation, route }: Props) {
           uid: user.uid,
           displayName: user.displayName,
         });
+        await notificationService.scheduleAutomaticEventReminders({
+          eventId: event.id,
+          title: event.title,
+          sport: event.sport,
+          date: event.date,
+          time: event.time,
+          location: event.location,
+        });
+        await notificationService.notifyJoinRequest({
+          eventId: event.id,
+          eventTitle: event.title,
+          requesterName: user.displayName,
+          organizerId: event.organizerId,
+        });
         setEvent((prev) =>
           prev
             ? {
@@ -158,6 +173,12 @@ export function MatchDetailsScreen({ navigation, route }: Props) {
           style: 'destructive',
           onPress: async () => {
             try {
+              if (event) {
+                await notificationService.notifyEventCancelled({
+                  eventId: event.id,
+                  eventTitle: event.title,
+                });
+              }
               await deleteEvent(eventId);
               navigation.popToTop();
             } catch {

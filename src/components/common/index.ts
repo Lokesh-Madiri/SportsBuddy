@@ -4,3 +4,7 @@ export { Avatar } from './Avatar';
 export { InputField } from './InputField';
 export { Badge } from './Badge';
 export { LoadingScreen } from './LoadingScreen';
+export { AnimatedBadge } from './AnimatedBadge';
+export { NeonButton } from './NeonButton';
+export { FloatingActionButton } from './FloatingActionButton';
+export { AnimatedTabBar } from './AnimatedTabBar';

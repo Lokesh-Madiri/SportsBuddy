@@ -4,6 +4,7 @@ import { ProfileStackParamList } from '../utils/types';
 import { ProfileScreen } from '../screens/ProfileScreen';
 import { EditProfileScreen } from '../screens/EditProfileScreen';
 import { LeaderboardScreen } from '../screens/LeaderboardScreen';
+import { NotificationCenterScreen } from '../screens/NotificationCenterScreen';
 
 const Stack = createNativeStackNavigator<ProfileStackParamList>();
 
@@ -18,6 +19,7 @@ export function ProfileNavigator() {
     >
       <Stack.Screen name="ProfileScreen" component={ProfileScreen} />
       <Stack.Screen name="EditProfile" component={EditProfileScreen} />
+      <Stack.Screen name="Notifications" component={NotificationCenterScreen} />
       <Stack.Screen name="Leaderboard" component={LeaderboardScreen} />
     </Stack.Navigator>
   );
