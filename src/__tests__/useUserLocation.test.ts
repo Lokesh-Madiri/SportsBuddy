@@ -1,6 +1,6 @@
 import fc from 'fast-check';
 import { renderHook, act } from '@testing-library/react-native';
-import { useUserLocation, resetSessionFlag } from './useUserLocation';
+import { useUserLocation, resetSessionFlag } from '../hooks/useUserLocation';
 import { locationService } from '../services/locationService';
 import { updateUserProfile } from '../firebase/firestore';
 import { useAuthStore } from '../store/authStore';

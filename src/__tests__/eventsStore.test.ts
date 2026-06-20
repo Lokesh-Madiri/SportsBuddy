@@ -1,6 +1,5 @@
 import fc from 'fast-check';
-import { useEventsStore } from './eventsStore';
-import type { SportEvent, UserLocation } from '../utils/types';
+import { useEventsStore } from '../store/eventsStore';
 
 function resetStore() {
   useEventsStore.setState({

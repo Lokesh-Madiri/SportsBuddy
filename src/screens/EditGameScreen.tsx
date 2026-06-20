@@ -21,6 +21,7 @@ import { InputField, PrimaryButton, GlassCard, LoadingScreen } from '../componen
 import { Colors, BorderRadius, Spacing } from '../theme';
 import { SPORTS, SKILL_LEVELS } from '../constants';
 import type { SportEvent } from '../utils/types';
+import { parseDateTime } from '../utils/helpers';
 
 type Props = {
   navigation: NativeStackNavigationProp<HomeStackParamList, 'EditGame'>;
@@ -115,20 +116,28 @@ export function EditGameScreen({ navigation, route }: Props) {
         maxPlayers: newMax,
         description: description.trim(),
       });
-      await notificationService.cancelEventReminders(eventId);
-      await notificationService.scheduleAutomaticEventReminders({
-        eventId,
-        title: title.trim() || `${sport} Game`,
-        sport,
-        date: updatedDate,
-        time,
-        location: { name: location.trim() },
-      });
+
+      // Update local reminder scheduling (non-blocking)
+      try {
+        await notificationService.cancelEventReminders(eventId);
+        await notificationService.scheduleAutomaticEventReminders({
+          eventId,
+          title: title.trim() || `${sport} Game`,
+          sport,
+          date: updatedDate,
+          time,
+          location: { name: location.trim() },
+        });
+      } catch (notificationError) {
+        console.warn('[EditGameScreen] Failed to update reminders:', notificationError);
+      }
+
       Alert.alert('Saved!', 'Event has been updated.', [
         { text: 'OK', onPress: () => navigation.goBack() },
       ]);
-    } catch {
-      Alert.alert('Error', 'Failed to save changes. Please try again.');
+    } catch (error: any) {
+      console.error('[EditGameScreen] Failed to save changes:', error);
+      Alert.alert('Error', `Failed to save changes: ${error?.message || error}`);
     } finally {
       setSaving(false);
     }

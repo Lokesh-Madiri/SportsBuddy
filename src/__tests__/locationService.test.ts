@@ -1,7 +1,7 @@
 import fc from 'fast-check';
-import { locationService } from './locationService';
+import { locationService } from '../services/locationService';
 
-jest.mock('./location/nearbyService', () => ({
+jest.mock('../services/location/nearbyService', () => ({
   nearbyService: {
     suggestLocalActivities: jest.fn(),
     getNearbySportsGrounds: jest.fn(async (options) => {

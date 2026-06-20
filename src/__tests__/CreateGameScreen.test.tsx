@@ -1,11 +1,35 @@
 import React from 'react';
 import { Alert } from 'react-native';
 import { render, fireEvent, waitFor } from '@testing-library/react-native';
-import { CreateGameScreen } from './CreateGameScreen';
+import { CreateGameScreen } from '../screens/CreateGameScreen';
 import { useAuthStore } from '../store/authStore';
 import { createEvent } from '../firebase/firestore';
 
 // Mock dependencies
+jest.mock('react-native-reanimated', () => {
+  return {
+    default: {
+      View: ({ children }: any) => children,
+    },
+    useSharedValue: (val: any) => ({ value: val }),
+    useAnimatedStyle: () => ({}),
+    withSequence: (...args: any[]) => args,
+    withTiming: (toValue: any) => toValue,
+    withDelay: (delay: any, animation: any) => animation,
+    withRepeat: (animation: any) => animation,
+    cancelAnimation: () => {},
+  };
+});
+jest.mock('react-native-worklets', () => ({
+  createSerializable: (fn: any) => fn,
+  Worklets: {
+    createRunInJS: (fn: any) => fn,
+    createRunInWorklet: (fn: any) => fn,
+  },
+}));
+jest.mock('@react-native-async-storage/async-storage', () =>
+  require('@react-native-async-storage/async-storage/jest/async-storage-mock')
+);
 jest.mock('expo-linear-gradient', () => ({
   LinearGradient: ({ children }: any) => children,
 }));
@@ -14,6 +38,12 @@ jest.mock('react-native-safe-area-context', () => ({
 }));
 jest.mock('../firebase/firestore', () => ({
   createEvent: jest.fn(() => Promise.resolve('mock-event-id')),
+}));
+jest.mock('../services/notifications', () => ({
+  notificationService: {
+    scheduleAutomaticEventReminders: jest.fn(() => Promise.resolve([])),
+    notifyNearbyPlayersOfNewGame: jest.fn(() => Promise.resolve()),
+  },
 }));
 jest.mock('../services/aiService', () => ({
   aiService: {
@@ -221,4 +251,3 @@ describe('CreateGameScreen - Visual Elements Testing', () => {
     });
   });
 });
-

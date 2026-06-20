@@ -1,11 +1,35 @@
 import React from 'react';
 import fc from 'fast-check';
 import { render } from '@testing-library/react-native';
-import { HomeScreen } from './HomeScreen';
+import { HomeScreen } from '../screens/HomeScreen';
 import { useEventsStore } from '../store/eventsStore';
 import { useAuthStore } from '../store/authStore';
 
 // Mock dependencies
+jest.mock('react-native-reanimated', () => {
+  return {
+    default: {
+      View: ({ children }: any) => children,
+    },
+    useSharedValue: (val: any) => ({ value: val }),
+    useAnimatedStyle: () => ({}),
+    withSequence: (...args: any[]) => args,
+    withTiming: (toValue: any) => toValue,
+    withDelay: (delay: any, animation: any) => animation,
+    withRepeat: (animation: any) => animation,
+    cancelAnimation: () => {},
+  };
+});
+jest.mock('react-native-worklets', () => ({
+  createSerializable: (fn: any) => fn,
+  Worklets: {
+    createRunInJS: (fn: any) => fn,
+    createRunInWorklet: (fn: any) => fn,
+  },
+}));
+jest.mock('@react-native-async-storage/async-storage', () =>
+  require('@react-native-async-storage/async-storage/jest/async-storage-mock')
+);
 jest.mock('expo-linear-gradient', () => ({
   LinearGradient: ({ children }: any) => children,
 }));

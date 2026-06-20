@@ -3,8 +3,6 @@ import Constants from 'expo-constants';
 import { Platform } from 'react-native';
 import type { PushTokenRecord } from './notificationTypes';
 
-type PermissionStatus = import('expo-notifications').PermissionStatus;
-
 // Helper function to get platform name since it's not exported from notificationHelpers
 function getPlatformName(): 'ios' | 'android' | 'web' | 'unknown' {
   if (Platform.OS === 'ios' || Platform.OS === 'android' || Platform.OS === 'web') {

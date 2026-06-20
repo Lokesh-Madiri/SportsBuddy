@@ -20,6 +20,7 @@ import { neonShadow } from '../utils/platform';
 import { useAuthStore } from '../store/authStore';
 import { createEvent } from '../firebase/firestore';
 import { aiService } from '../services/aiService';
+import { notificationService } from '../services/notifications';
 import { locationService, geocodingService } from '../services/locationService';
 import { PrimaryButton, InputField, GlassCard } from '../components/common';
 import { Colors, BorderRadius, Spacing } from '../theme';
@@ -300,7 +301,7 @@ export function CreateGameScreen({ navigation }: Props) {
             name: item.name,
             address: item.display_name
           })));
-        } catch (e) {} finally {
+        } catch {} finally {
           setIsSearchingLocation(false);
         }
       }, 600);
@@ -485,21 +486,54 @@ export function CreateGameScreen({ navigation }: Props) {
         status: 'upcoming',
       });
 
-      await notificationService.scheduleAutomaticEventReminders({
-        eventId,
+      // Notify nearby players (staggered batches by distance, non-blocking background task)
+      const creatorCoords = userCoords || { latitude: 0, longitude: 0 };
+      const eventPayload = {
+        id: eventId,
         title: `${sport} Game`,
         sport,
+        description: description.trim(),
+        location: { name: location.trim() },
         date: combined,
         time,
-        location: { name: location.trim() },
+        skillLevel,
+        maxPlayers: parseInt(maxPlayers, 10) || 10,
+        currentPlayers: 1,
+        participants: user
+          ? [{ uid: user.uid, displayName: user.displayName, confirmed: true, joinedAt: new Date() }]
+          : [],
+        organizerId: user?.uid || '',
+        organizerName: user?.displayName || 'Unknown',
+        organizerRating: user?.rating,
+        status: 'upcoming' as const,
+        createdAt: new Date(),
+        updatedAt: new Date(),
+      };
+      notificationService.notifyNearbyPlayersOfNewGame(eventPayload, creatorCoords).catch((e) => {
+        console.warn('[CreateGameScreen] Failed to notify nearby players:', e);
       });
+
+      // Schedule reminders on organizer's local device (non-blocking)
+      try {
+        await notificationService.scheduleAutomaticEventReminders({
+          eventId,
+          title: `${sport} Game`,
+          sport,
+          date: combined,
+          time,
+          location: { name: location.trim() },
+        });
+      } catch (notificationError) {
+        console.warn('[CreateGameScreen] Failed to schedule reminders:', notificationError);
+      }
 
       Alert.alert('Game Created!', 'Your game has been published.', [
         { text: 'View Game', onPress: () => navigation.replace('MatchDetails', { eventId }) },
         { text: 'Go Home', onPress: () => navigation.popToTop() },
       ]);
-    } catch {
-      Alert.alert('Error', 'Failed to create game. Please try again.');
+    } catch (error: any) {
+      console.error('[CreateGameScreen] Failed to create game:', error);
+      Alert.alert('Error', `Failed to create game: ${error?.message || error}`);
     } finally {
       setLoading(false);
     }

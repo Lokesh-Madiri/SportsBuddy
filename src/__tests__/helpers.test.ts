@@ -3,7 +3,7 @@ import {
   isValidEmail,
   isValidPassword,
   truncate,
-} from './helpers';
+} from '../utils/helpers';
 
 describe('helpers utility functions', () => {
   describe('getInitials', () => {

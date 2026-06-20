@@ -11,9 +11,9 @@ let NotificationsModule: typeof import('expo-notifications') | null = null;
 
 async function getNotifications(): Promise<typeof import('expo-notifications')> {
   if (!NotificationsModule) {
-    NotificationsModule = await import('expo-notifications');
+    NotificationsModule = require('expo-notifications') as typeof import('expo-notifications');
   }
-  return NotificationsModule;
+  return NotificationsModule!;
 }
 
 type ReminderRegistry = Record<string, string[]>;
