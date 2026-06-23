@@ -174,6 +174,7 @@ export interface SportEvent {
   status: 'upcoming' | 'ongoing' | 'completed' | 'cancelled';
   chatId?: string;
   distance?: string;
+  distanceMiles?: number | null;
   createdAt: Date;
   updatedAt: Date;
 }
@@ -288,6 +289,7 @@ export type AuthStackParamList = {
 export type MainTabParamList = {
   Home: undefined;
   Discover: undefined;
+  CreateMatch: undefined;
   Chat: undefined;
   Profile: undefined;
 };
@@ -302,6 +304,7 @@ export type HomeStackParamList = {
   AllEvents: undefined;
   AllPlayers: undefined;
   Leaderboard: { sport?: string };
+  Notifications: undefined;
 };
 
 export type DiscoverStackParamList = {
@@ -319,5 +322,7 @@ export type ProfileStackParamList = {
   ProfileScreen: undefined;
   EditProfile: undefined;
   Settings: undefined;
+  Notifications: undefined;
   Leaderboard: { sport?: string };
+  AdminPanel: undefined;
 };

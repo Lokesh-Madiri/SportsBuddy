@@ -1,6 +1,6 @@
 import React from 'react';
 import { render } from '@testing-library/react-native';
-import { Badge } from './Badge';
+import { Badge } from '../components/common/Badge';
 
 describe('Badge Component', () => {
   test('renders the label text correctly', () => {

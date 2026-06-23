@@ -12,6 +12,7 @@ import { LinearGradient } from 'expo-linear-gradient';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { NativeStackNavigationProp } from '@react-navigation/native-stack';
 import { useNavigation } from '@react-navigation/native';
+import { Ionicons } from '@expo/vector-icons';
 import { HomeStackParamList } from '../utils/types';
 import { neonShadow } from '../utils/platform';
 import { useAuthStore } from '../store/authStore';
@@ -32,7 +33,7 @@ export function HomeScreen({ navigation }: Props) {
   const { user } = useAuthStore();
   // useNavigation gives access to the parent tab navigator for cross-tab navigation
   const tabNavigation = useNavigation<any>();
-  const { setEvents, getFilteredEvents, searchQuery, setSearchQuery } = useEventsStore();
+  const { setEvents, getFilteredEvents, searchQuery, setSearchQuery, userLocation } = useEventsStore();
   const [aiPicks, setAiPicks] = useState<AIRecommendation[]>([]);
   const [refreshing, setRefreshing] = useState(false);
   const [selectedSport, setSelectedSport] = useState<string | null>(null);
@@ -65,7 +66,10 @@ export function HomeScreen({ navigation }: Props) {
   const displayEvents = selectedSport
     ? filteredEvents.filter((e) => e.sport === selectedSport)
     : filteredEvents;
-  const eventsToShow = displayEvents.length > 0 ? displayEvents : MOCK_EVENTS;
+  const nearbyEvents = userLocation
+    ? displayEvents.filter((e) => e.distanceMiles === null || e.distanceMiles === undefined || e.distanceMiles <= 25)
+    : displayEvents;
+  const eventsToShow = nearbyEvents.length > 0 ? nearbyEvents : MOCK_EVENTS;
 
   return (
     <LinearGradient colors={['#0a0a0a', '#0f0f14', '#0a0a0a']} style={styles.container}>
@@ -86,12 +90,20 @@ export function HomeScreen({ navigation }: Props) {
               <Text style={styles.greeting}>{greeting()}</Text>
               <Text style={styles.headerTitle}>Find Your Game</Text>
             </View>
-            <TouchableOpacity
-              onPress={() => tabNavigation.navigate('Profile')}
-              style={styles.avatarButton}
-            >
-              <Avatar name={user?.displayName || 'User'} size={44} />
-            </TouchableOpacity>
+            <View style={styles.headerActions}>
+              <TouchableOpacity
+                onPress={() => navigation.navigate('Notifications')}
+                style={styles.iconButton}
+              >
+                <Ionicons name="notifications-outline" size={20} color={Colors.primary} />
+              </TouchableOpacity>
+              <TouchableOpacity
+                onPress={() => tabNavigation.navigate('Profile')}
+                style={styles.avatarButton}
+              >
+                <Avatar name={user?.displayName || 'User'} size={44} />
+              </TouchableOpacity>
+            </View>
           </View>
 
           {/* Search */}
@@ -326,6 +338,21 @@ const styles = StyleSheet.create({
     borderRadius: BorderRadius.full,
     borderWidth: 1,
     borderColor: Colors.border,
+  },
+  headerActions: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 10,
+  },
+  iconButton: {
+    width: 42,
+    height: 42,
+    borderRadius: 21,
+    backgroundColor: Colors.secondary,
+    borderWidth: 1,
+    borderColor: Colors.border,
+    alignItems: 'center',
+    justifyContent: 'center',
   },
   searchContainer: {
     flexDirection: 'row',

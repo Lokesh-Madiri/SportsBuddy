@@ -14,6 +14,13 @@ const iosClientId = process.env.EXPO_PUBLIC_GOOGLE_IOS_CLIENT_ID || undefined;
 const webClientId = process.env.EXPO_PUBLIC_GOOGLE_WEB_CLIENT_ID || undefined;
 const expoClientId = process.env.EXPO_PUBLIC_GOOGLE_EXPO_CLIENT_ID || undefined;
 
+console.log('Google Auth Config:', {
+  androidClientId,
+  iosClientId,
+  webClientId,
+  expoClientId,
+});
+
 export const googleAuthConfig = {
   androidClientId,
   iosClientId,
@@ -26,6 +33,15 @@ export const isGoogleAuthConfigured =
   !!androidClientId || !!iosClientId || !!webClientId;
 
 export function useGoogleAuthRequest() {
+  if (!isGoogleAuthConfigured) {
+    return [
+      null,
+      null,
+      () => Promise.resolve({ type: 'dismiss' as const }),
+    ] as const;
+  }
+
+  // eslint-disable-next-line react-hooks/rules-of-hooks
   return Google.useIdTokenAuthRequest({
     androidClientId,
     iosClientId,

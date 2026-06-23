@@ -16,10 +16,12 @@ import { RouteProp } from '@react-navigation/native';
 import { HomeStackParamList } from '../utils/types';
 import { useAuthStore } from '../store/authStore';
 import { getEventById, updateEvent } from '../firebase/firestore';
+import { notificationService } from '../services/notifications';
 import { InputField, PrimaryButton, GlassCard, LoadingScreen } from '../components/common';
 import { Colors, BorderRadius, Spacing } from '../theme';
 import { SPORTS, SKILL_LEVELS } from '../constants';
 import type { SportEvent } from '../utils/types';
+import { parseDateTime } from '../utils/helpers';
 
 type Props = {
   navigation: NativeStackNavigationProp<HomeStackParamList, 'EditGame'>;
@@ -103,21 +105,39 @@ export function EditGameScreen({ navigation, route }: Props) {
 
     setSaving(true);
     try {
+      const updatedDate = parseDateTime(date, time);
       await updateEvent(eventId, {
         title: title.trim() || `${sport} Game`,
         sport,
         location: { name: location.trim() },
-        date: new Date(`${date} ${time}`),
+        date: updatedDate,
         time,
         skillLevel,
         maxPlayers: newMax,
         description: description.trim(),
       });
+
+      // Update local reminder scheduling (non-blocking)
+      try {
+        await notificationService.cancelEventReminders(eventId);
+        await notificationService.scheduleAutomaticEventReminders({
+          eventId,
+          title: title.trim() || `${sport} Game`,
+          sport,
+          date: updatedDate,
+          time,
+          location: { name: location.trim() },
+        });
+      } catch (notificationError) {
+        console.warn('[EditGameScreen] Failed to update reminders:', notificationError);
+      }
+
       Alert.alert('Saved!', 'Event has been updated.', [
         { text: 'OK', onPress: () => navigation.goBack() },
       ]);
-    } catch {
-      Alert.alert('Error', 'Failed to save changes. Please try again.');
+    } catch (error: any) {
+      console.error('[EditGameScreen] Failed to save changes:', error);
+      Alert.alert('Error', `Failed to save changes: ${error?.message || error}`);
     } finally {
       setSaving(false);
     }

@@ -42,8 +42,9 @@ export const STORAGE_KEYS = {
 export const AI_CONFIG = {
   OPENAI_API_KEY: process.env.EXPO_PUBLIC_OPENAI_API_KEY || '',
   OPENROUTER_API_KEY: process.env.EXPO_PUBLIC_OPENROUTER_API_KEY || '',
-  PROVIDER: process.env.EXPO_PUBLIC_AI_PROVIDER || 'openai',
-  MODEL: process.env.EXPO_PUBLIC_AI_MODEL || 'gpt-4o-mini',
+  GROQ_API_KEY: process.env.EXPO_PUBLIC_GROQ_API_KEY || '',
+  PROVIDER: process.env.EXPO_PUBLIC_AI_PROVIDER || 'groq',
+  MODEL: process.env.EXPO_PUBLIC_AI_MODEL || 'llama-3.3-70b-versatile',
   MAX_TOKENS: 500,
 };
 

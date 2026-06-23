@@ -29,6 +29,7 @@ expo-env.d.ts
 *.mobileprovision
 *.pem
 
+
 # =========================
 # Environment variables
 # =========================
@@ -68,10 +69,11 @@ Thumbs.db
 # =========================
 skills-lock.json
 .agents/
-
-
+.agent/
 
 # =========================
 # Misc
 # =========================
 *.orig.*
+.kiro
+location_flow.drawio

@@ -24,6 +24,7 @@ import {
   completeEvent,
   ensureChat,
 } from '../firebase/firestore';
+import { notificationService } from '../services/notifications';
 import { GlassCard, Avatar, Badge, PrimaryButton, LoadingScreen } from '../components/common';
 import { Colors, BorderRadius, Spacing } from '../theme';
 import { formatDate } from '../utils/helpers';
@@ -115,6 +116,27 @@ export function MatchDetailsScreen({ navigation, route }: Props) {
           uid: user.uid,
           displayName: user.displayName,
         });
+
+        // Trigger notifications asynchronously / locally (non-blocking)
+        try {
+          await notificationService.scheduleAutomaticEventReminders({
+            eventId: event.id,
+            title: event.title,
+            sport: event.sport,
+            date: event.date,
+            time: event.time,
+            location: event.location,
+          });
+          await notificationService.notifyJoinRequest({
+            eventId: event.id,
+            eventTitle: event.title,
+            requesterName: user.displayName,
+            organizerId: event.organizerId,
+          });
+        } catch (notificationError) {
+          console.warn('[MatchDetailsScreen] Failed to send join notifications/reminders:', notificationError);
+        }
+
         setEvent((prev) =>
           prev
             ? {
@@ -128,8 +150,9 @@ export function MatchDetailsScreen({ navigation, route }: Props) {
             : prev
         );
       }
-    } catch {
-      Alert.alert('Error', 'Failed to update participation. Try again.');
+    } catch (error: any) {
+      console.error('[MatchDetailsScreen] Failed to update participation:', error);
+      Alert.alert('Error', `Failed to update participation: ${error?.message || error}`);
     } finally {
       setJoining(false);
     }
@@ -158,10 +181,21 @@ export function MatchDetailsScreen({ navigation, route }: Props) {
           style: 'destructive',
           onPress: async () => {
             try {
+              try {
+                if (event) {
+                  await notificationService.notifyEventCancelled({
+                    eventId: event.id,
+                    eventTitle: event.title,
+                  });
+                }
+              } catch (notificationError) {
+                console.warn('[MatchDetailsScreen] Failed to notify event cancellation:', notificationError);
+              }
               await deleteEvent(eventId);
               navigation.popToTop();
-            } catch {
-              Alert.alert('Error', 'Failed to delete event. Try again.');
+            } catch (error: any) {
+              console.error('[MatchDetailsScreen] Failed to delete event:', error);
+              Alert.alert('Error', `Failed to delete event: ${error?.message || error}`);
             }
           },
         },

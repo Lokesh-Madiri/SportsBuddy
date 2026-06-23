@@ -151,6 +151,28 @@ export async function sendMessage(chatId: string, message: Omit<Message, 'id' | 
     updatedAt: serverTimestamp(),
   });
 
+  // Trigger push notifications to other participants via Novu
+  try {
+    const chatSnap = await getDoc(doc(db, FIRESTORE_COLLECTIONS.CHATS, chatId));
+    if (chatSnap.exists()) {
+      const chatData = chatSnap.data();
+      const participants: string[] = chatData.participants || [];
+      const otherParticipants = participants.filter((uid) => uid !== message.senderId);
+
+      if (otherParticipants.length > 0) {
+        const { novuService } = require('../services/notifications/novuService');
+        await novuService.triggerNotification('chat-message', otherParticipants, {
+          senderName: message.senderName,
+          messageText: message.text,
+          eventTitle: chatData.eventTitle || 'Game Chat',
+          chatId,
+        });
+      }
+    }
+  } catch (err) {
+    console.warn('[Firestore] Failed to trigger chat message push notification via Novu:', err);
+  }
+
   return ref.id;
 }
 
