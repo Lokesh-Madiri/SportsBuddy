@@ -22,6 +22,11 @@ export function useNotifications() {
   useEffect(() => {
     let mounted = true;
 
+    if (user?.uid) {
+      const { pushNotificationService } = require('../services/notifications/pushNotificationService');
+      pushNotificationService.registerForPushNotifications(user.uid);
+    }
+
     // Listen for notifications received
     notificationService.addNotificationListener(
       (notification) => {

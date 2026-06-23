@@ -97,12 +97,21 @@ export function ProfileScreen({ navigation }: Props) {
       <SafeAreaView style={styles.safeArea} edges={['top']}>
         <View style={styles.header}>
           <Text style={styles.headerTitle}>Profile</Text>
-          <TouchableOpacity
-            style={styles.settingsButton}
-            onPress={() => navigation.navigate('Notifications')}
-          >
-            <Ionicons name="notifications-outline" size={20} color={Colors.primary} />
-          </TouchableOpacity>
+          <View style={styles.headerButtons}>
+            <TouchableOpacity
+              style={styles.settingsButton}
+              onPress={() => navigation.navigate('AdminPanel')}
+              accessibilityLabel="Admin Panel"
+            >
+              <Ionicons name="shield-checkmark-outline" size={20} color={Colors.primary} />
+            </TouchableOpacity>
+            <TouchableOpacity
+              style={styles.settingsButton}
+              onPress={() => navigation.navigate('Notifications')}
+            >
+              <Ionicons name="notifications-outline" size={20} color={Colors.primary} />
+            </TouchableOpacity>
+          </View>
         </View>
 
         <ScrollView showsVerticalScrollIndicator={false} contentContainerStyle={styles.scrollContent}>
@@ -242,6 +251,11 @@ const styles = StyleSheet.create({
     paddingHorizontal: Spacing.lg,
     paddingTop: Spacing.md,
     paddingBottom: Spacing.base,
+  },
+  headerButtons: {
+    flexDirection: 'row',
+    gap: 8,
+    alignItems: 'center',
   },
   headerTitle: {
     fontSize: 20,

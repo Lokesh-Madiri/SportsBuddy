@@ -179,12 +179,25 @@ export const notificationService = {
       }),
       'social'
     );
+
+    // Trigger real push notification via Novu
+    try {
+      const { novuService } = require('./novuService');
+      await novuService.triggerNotification('join-request', [input.organizerId], {
+        requesterName: input.requesterName,
+        eventTitle: input.eventTitle,
+        eventId: input.eventId,
+      });
+    } catch (err) {
+      console.warn('[NotificationService] Failed to send Novu join-request push:', err);
+    }
   },
 
   async notifyJoinRequestDecision(
     accepted: boolean,
     eventId: string,
-    eventTitle: string
+    eventTitle: string,
+    requesterId?: string
   ): Promise<void> {
     const allowed = await this.initialize();
     if (!allowed) return;
@@ -204,6 +217,22 @@ export const notificationService = {
       }),
       'social'
     );
+
+    // Trigger real push notification via Novu
+    if (requesterId) {
+      try {
+        const { novuService } = require('./novuService');
+        await novuService.triggerNotification('join-request-decision', [requesterId], {
+          decisionTitle: title,
+          decisionBody: body,
+          eventId,
+          eventTitle,
+          accepted,
+        });
+      } catch (err) {
+        console.warn('[NotificationService] Failed to send Novu join-request-decision push:', err);
+      }
+    }
   },
 
   async notifyChatMessage(input: ChatNotificationInput): Promise<void> {
@@ -250,6 +279,33 @@ export const notificationService = {
       }),
       'matches'
     );
+
+    // Trigger real push notifications via Novu to all participants
+    try {
+      const { db } = require('../../firebase/config');
+      const { doc, getDoc } = require('firebase/firestore');
+      const { FIRESTORE_COLLECTIONS } = require('../../constants');
+
+      const eventSnap = await getDoc(doc(db, FIRESTORE_COLLECTIONS.EVENTS, input.eventId));
+      if (eventSnap.exists()) {
+        const eventData = eventSnap.data();
+        const participants: any[] = eventData.participants || [];
+        const participantIds = participants
+          .map((p) => p.uid)
+          .filter((uid) => uid !== eventData.organizerId);
+
+        if (participantIds.length > 0) {
+          const { novuService } = require('./novuService');
+          await novuService.triggerNotification('event-cancelled', participantIds, {
+            eventTitle: input.eventTitle,
+            reason: input.reason || 'by the organizer',
+            eventId: input.eventId,
+          });
+        }
+      }
+    } catch (err) {
+      console.warn('[NotificationService] Failed to notify event cancellation via Novu:', err);
+    }
   },
 
   async notifyNearbyPlayersOfNewGame(event: SportEvent, center: Coordinates): Promise<void> {
@@ -322,16 +378,20 @@ export const notificationService = {
           } users located between ${bracket.min} and ${bracket.max} miles away...`
         );
 
-        // Simulate sending notifications to this batch of users
-        await Promise.all(
-          bracket.users.map(async (u) => {
-            console.log(
-              `[NotificationService] Notifying user ${u.displayName} (${u.distance.miles.toFixed(
-                2
-              )} miles away) about new ${event.sport} game: "${event.title}"`
-            );
-          })
-        );
+        // Send push notifications via Novu to the batch of interested users
+        const userIds = bracket.users.map((u) => u.uid);
+        if (userIds.length > 0) {
+          try {
+            const { novuService } = require('./novuService');
+            await novuService.triggerNotification('new-nearby-game', userIds, {
+              sport: event.sport,
+              eventTitle: event.title,
+              eventId: event.id,
+            });
+          } catch (err) {
+            console.warn('[NotificationService] Failed to notify nearby players via Novu:', err);
+          }
+        }
 
         // Wait 1.5 seconds between batches to stagger delivery (0ms in tests to avoid timeouts)
         if (i < activeBrackets.length - 1) {

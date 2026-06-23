@@ -52,11 +52,106 @@ export const pushNotificationService = {
    * Register for push notifications
    * Always returns null in Expo Go as remote push notifications are disabled
    */
-  async registerForPushNotifications(_userId?: string): Promise<string | null> {
-    // Remote push notifications disabled in Expo Go
-    // Use Development Build or EAS Build for FCM/APNs support
-    console.warn('Push notifications disabled in Expo Go. Use Development Build or EAS Build for FCM/APNs support.');
-    return null;
+  async registerForPushNotifications(userId?: string): Promise<string | null> {
+    if (!Device.isDevice) {
+      console.warn('[Push] Must use physical device for remote push notifications');
+      return null;
+    }
+
+    try {
+      const Notifications = require('expo-notifications') as typeof import('expo-notifications');
+      const { status: existingStatus } = await Notifications.getPermissionsAsync();
+      let finalStatus = existingStatus;
+      if (existingStatus !== 'granted') {
+        const { status } = await Notifications.requestPermissionsAsync();
+        finalStatus = status;
+      }
+      if (finalStatus !== 'granted') {
+        console.warn('[Push] Failed to get push token: permission denied');
+        return null;
+      }
+
+      // Get Expo Project ID
+      const projectId =
+        Constants.expoConfig?.extra?.eas?.projectId ??
+        Constants.easConfig?.projectId;
+
+      const tokenData = await Notifications.getExpoPushTokenAsync({
+        projectId,
+      });
+      const token = tokenData.data;
+      console.log('[Push] Registered Expo push token:', token);
+
+      if (userId) {
+        const { doc, setDoc, getDoc, getDocs, collection, query, where, writeBatch, serverTimestamp } = require('firebase/firestore');
+        const { db } = require('../../firebase/config');
+        const { FIRESTORE_COLLECTIONS } = require('../../constants');
+
+        try {
+          // Disassociate this token from any other users to prevent duplicate/cross-user notifications on the same device
+          const usersRef = collection(db, FIRESTORE_COLLECTIONS.USERS);
+          const q = query(usersRef, where('fcmToken', '==', token));
+          const querySnapshot = await getDocs(q);
+
+          const batch = writeBatch(db);
+          let hasUpdates = false;
+
+          querySnapshot.forEach((userDoc: any) => {
+            if (userDoc.id !== userId) {
+              batch.update(userDoc.ref, {
+                fcmToken: null,
+                updatedAt: serverTimestamp(),
+              });
+              hasUpdates = true;
+            }
+          });
+
+          if (hasUpdates) {
+            await batch.commit();
+            console.log('[Push] Disassociated duplicate push token from other user documents');
+          }
+        } catch (err) {
+          console.warn('[Push] Error disassociating duplicate push token:', err);
+        }
+
+        // Retrieve user profile to sync with Novu
+        let displayName = 'Player';
+        let photoURL = '';
+        try {
+          const userSnap = await getDoc(doc(db, FIRESTORE_COLLECTIONS.USERS, userId));
+          if (userSnap.exists()) {
+            const userData = userSnap.data();
+            displayName = userData.displayName || 'Player';
+            photoURL = userData.photoURL || userData.profileImage || userData.imageURL || '';
+          }
+        } catch (profileErr) {
+          console.warn('[Push] Failed to fetch user profile for Novu sync:', profileErr);
+        }
+
+        await setDoc(
+          doc(db, FIRESTORE_COLLECTIONS.USERS, userId),
+          {
+            fcmToken: token, // Store the Expo push token in fcmToken field
+            updatedAt: serverTimestamp(),
+          },
+          { merge: true }
+        );
+
+        // Sync with Novu
+        try {
+          const { novuService } = require('./novuService');
+          await novuService.upsertSubscriber(userId, displayName, photoURL);
+          await novuService.updateSubscriberToken(userId, token);
+        } catch (novuErr) {
+          console.warn('[Push] Failed to sync token and subscriber with Novu:', novuErr);
+        }
+      }
+
+      return token;
+    } catch (error) {
+      console.warn('[Push] Error registering for push notifications:', error);
+      return null;
+    }
   },
 
   /**

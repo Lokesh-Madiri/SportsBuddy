@@ -5,6 +5,7 @@ import { ProfileScreen } from '../screens/ProfileScreen';
 import { EditProfileScreen } from '../screens/EditProfileScreen';
 import { LeaderboardScreen } from '../screens/LeaderboardScreen';
 import { NotificationCenterScreen } from '../screens/NotificationCenterScreen';
+import { AdminPanelScreen } from '../screens/AdminPanelScreen';
 
 const Stack = createNativeStackNavigator<ProfileStackParamList>();
 
@@ -21,6 +22,7 @@ export function ProfileNavigator() {
       <Stack.Screen name="EditProfile" component={EditProfileScreen} />
       <Stack.Screen name="Notifications" component={NotificationCenterScreen} />
       <Stack.Screen name="Leaderboard" component={LeaderboardScreen} />
+      <Stack.Screen name="AdminPanel" component={AdminPanelScreen} />
     </Stack.Navigator>
   );
 }

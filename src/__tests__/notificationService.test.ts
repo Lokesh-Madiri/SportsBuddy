@@ -24,6 +24,17 @@ jest.mock('expo-notifications', () => ({
   SchedulableTriggerInputTypes: { DATE: 'date', TIME_INTERVAL: 'time_interval' },
 }));
 
+// Mock novuService so we can verify Novu trigger calls without real network requests
+const mockTriggerNotification = jest.fn().mockResolvedValue(true);
+jest.mock('../services/notifications/novuService', () => ({
+  novuService: {
+    isEnabled: jest.fn(() => true),
+    upsertSubscriber: jest.fn().mockResolvedValue(true),
+    updateSubscriberToken: jest.fn().mockResolvedValue(true),
+    triggerNotification: mockTriggerNotification,
+  },
+}));
+
 describe('NotificationService & Proximity Batching', () => {
   beforeEach(() => {
     jest.clearAllMocks();
@@ -88,8 +99,8 @@ describe('NotificationService & Proximity Batching', () => {
       expect(console.log).toHaveBeenCalledWith('[NotificationService] No nearby players interested in', 'Soccer');
     });
 
-    test('batches nearby users by distance and processes them sequentially', async () => {
-      // Mock 4 players: 3 interested in Soccer, 1 interested in Basketball (skipped)
+    test('batches nearby users by distance and triggers Novu notifications per bracket', async () => {
+      // Mock 4 players: 3 interested in Soccer (batched by distance), 1 interested in Basketball (skipped)
       const mockUsers = [
         { uid: 'u1', displayName: 'Player Close', distance: { miles: 1.0 }, sports: ['Soccer'] },
         { uid: 'u2', displayName: 'Player Mid', distance: { miles: 3.5 }, sports: ['soccer'] },
@@ -99,8 +110,7 @@ describe('NotificationService & Proximity Batching', () => {
       
       (locationService.getNearbyUsers as jest.Mock).mockResolvedValueOnce(mockUsers);
 
-      const notifyPromise = notificationService.notifyNearbyPlayersOfNewGame(mockEvent, mockCenter);
-      await notifyPromise;
+      await notificationService.notifyNearbyPlayersOfNewGame(mockEvent, mockCenter);
 
       // Verify overall summary logs
       expect(console.log).toHaveBeenCalledWith(
@@ -119,19 +129,28 @@ describe('NotificationService & Proximity Batching', () => {
         expect.stringContaining('Total skipped: 1')
       );
 
-      // Verify that the 3 interested players were notified in batches
-      expect(console.log).toHaveBeenCalledWith(
-        expect.stringContaining('Sending notification batch 1')
+      // Verify Novu triggerNotification was called once per distance bracket
+      // Bracket 0-2 miles: u1 (Player Close)
+      expect(mockTriggerNotification).toHaveBeenCalledWith(
+        'new-nearby-game',
+        ['u1'],
+        expect.objectContaining({ sport: 'Soccer', eventTitle: 'Pickup Soccer', eventId: 'event-1' })
       );
-      expect(console.log).toHaveBeenCalledWith(
-        expect.stringContaining('Notifying user Player Close')
+      // Bracket 2-5 miles: u2 (Player Mid)
+      expect(mockTriggerNotification).toHaveBeenCalledWith(
+        'new-nearby-game',
+        ['u2'],
+        expect.objectContaining({ sport: 'Soccer', eventTitle: 'Pickup Soccer', eventId: 'event-1' })
       );
-      expect(console.log).toHaveBeenCalledWith(
-        expect.stringContaining('Notifying user Player Mid')
+      // Bracket 10+ miles: u4 (Player Very Far)
+      expect(mockTriggerNotification).toHaveBeenCalledWith(
+        'new-nearby-game',
+        ['u4'],
+        expect.objectContaining({ sport: 'Soccer', eventTitle: 'Pickup Soccer', eventId: 'event-1' })
       );
-      expect(console.log).toHaveBeenCalledWith(
-        expect.stringContaining('Notifying user Player Very Far')
-      );
+
+      // triggerNotification should have been called 3 times (once per active bracket)
+      expect(mockTriggerNotification).toHaveBeenCalledTimes(3);
     });
   });
 });

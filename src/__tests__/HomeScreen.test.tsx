@@ -57,6 +57,10 @@ jest.mock('../services/locationService', () => ({
     getNearbyVenues: jest.fn(() => new Promise(() => {})),
   },
 }));
+jest.mock('@expo/vector-icons', () => ({
+  Ionicons: () => null,
+}));
+
 jest.mock('@react-navigation/native', () => ({
   ...jest.requireActual('@react-navigation/native'),
   useNavigation: () => ({
@@ -85,7 +89,7 @@ describe('HomeScreen location filtering properties', () => {
         fc.array(
           fc.record({
             id: fc.uuid(),
-            title: fc.string({ minLength: 1 }),
+            title: fc.string({ minLength: 1 }).map((t) => `Event: ${t}`),
             distanceMiles: fc.double({ min: 0, max: 100, noNaN: true }),
           })
         ),

@@ -324,4 +324,5 @@ export type ProfileStackParamList = {
   Settings: undefined;
   Notifications: undefined;
   Leaderboard: { sport?: string };
+  AdminPanel: undefined;
 };
