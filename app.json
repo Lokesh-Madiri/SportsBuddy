@@ -2,7 +2,6 @@
   "expo": {
     "name": "SportsBuddy",
     "slug": "sportsbuddy",
-    "owner": "nsky_26",
     "scheme": "sportsbuddy",
     "version": "1.0.0",
     "orientation": "portrait",
@@ -61,8 +60,9 @@
     ],
     "extra": {
       "eas": {
-        "projectId": "3f50f4a9-bb99-4464-ad6c-0fa346fe6cc4"
+        "projectId": "67104114-cb03-411a-8f34-f9ad1fcb4d61"
       }
-    }
+    },
+    "owner": "madirilokesh"
   }
 }
